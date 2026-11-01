@@ -1,0 +1,3192 @@
+<!DOCTYPE html>
+<html lang="zh-TW" class="h-full bg-slate-50">
+<head>
+  <meta charset="UTF-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1.0, viewport-fit=cover">
+  <title>積木減脂：飲食與體重</title>
+  <!-- PWA Meta -->
+  <meta name="theme-color" content="#059669">
+  <meta name="description" content="積木式減脂飲食記錄 + 體重目標追蹤，整合在同一個 PWA">
+  <link rel="manifest" href="manifest.webmanifest">
+  <link rel="icon" type="image/png" href="icons/icon-192.png">
+  <link rel="apple-touch-icon" href="icons/apple-touch-icon.png">
+  <meta name="mobile-web-app-capable" content="yes">
+  <meta name="apple-mobile-web-app-capable" content="yes">
+  <meta name="apple-mobile-web-app-title" content="積木減脂">
+  <meta name="apple-mobile-web-app-status-bar-style" content="default">
+  <!-- 全部本地化 + 固定版本：Tailwind 3.4.19 (預先編譯)、Chart.js 4.6.1、Lucide 1.61.0 -->
+  <script>
+    // 先套用主題 (在畫面繪製前)，避免深色使用者看到一閃而過的白畫面
+    (function () {
+      try {
+        var t = localStorage.getItem("fat_loss_pwa_theme") || "auto";
+        var dark = t === "dark" || (t === "auto" && window.matchMedia && window.matchMedia("(prefers-color-scheme: dark)").matches);
+        if (dark) document.documentElement.classList.add("dark");
+      } catch (e) {}
+    })();
+  </script>
+  <link rel="stylesheet" href="tailwind.css">
+  <script src="vendor/chart.umd.min.js"></script>
+  <script src="vendor/lucide.min.js"></script>
+  <style>
+    body { font-family: -apple-system, BlinkMacSystemFont, "Segoe UI", Roboto, "Helvetica Neue", Arial, sans-serif; }
+    .no-scrollbar::-webkit-scrollbar { display: none; }
+    .no-scrollbar { -ms-overflow-style: none; scrollbar-width: none; }
+    .safe-bottom { padding-bottom: env(safe-area-inset-bottom, 0px); }
+    :root { color-scheme: light; }
+    html.dark { color-scheme: dark; }
+    /* 手機上輸入框小於 16px 時，iOS 會在聚焦時自動放大畫面 */
+    @media (pointer: coarse) { input, select, textarea { font-size: 16px !important; } }
+    input[type=date], input[type=datetime-local], input[type=time] { -webkit-appearance: none; appearance: none; }
+    details > summary { list-style: none; }
+    details > summary::-webkit-details-marker { display: none; }
+    details > summary::after { content: "▾"; float: right; color: #94a3b8; }
+    details[open] > summary::after { content: "▴"; }
+  </style>
+</head>
+<body class="min-h-full text-slate-800 flex flex-col pb-28">
+
+  <!-- Header -->
+  <header class="bg-emerald-600 text-white sticky top-0 z-30 shadow-md">
+    <div class="max-w-2xl mx-auto px-4 py-3 flex items-center justify-between">
+      <div class="flex items-center gap-2">
+        <i data-lucide="utensils-crossed" class="w-6 h-6"></i>
+        <h1 class="text-lg font-bold tracking-wide">積木減脂</h1>
+      </div>
+      <span class="text-xs bg-emerald-700 text-emerald-100 px-2 py-1 rounded-full font-medium">飲食 × 體重</span>
+    </div>
+  </header>
+
+  <!-- Main Content Area -->
+  <main class="flex-1 max-w-2xl w-full mx-auto p-4 space-y-6">
+
+    <!-- TAB 1: 每日飲食記錄 -->
+    <section id="tab-tracker" class="tab-content space-y-5">
+      
+      <div id="setup-card-tracker"></div>
+
+      <!-- 安裝提醒 -->
+      <div id="install-reminder" class="hidden bg-emerald-50 border border-emerald-200 rounded-xl p-3 text-emerald-900 text-xs flex items-center gap-2 shadow-sm">
+        <span class="flex-1">加入主畫面後離線也能用，資料也比較不容易被瀏覽器清掉。</span>
+        <button onclick="installApp()" class="shrink-0 bg-emerald-600 text-white px-2.5 py-1 rounded-lg font-medium">安裝</button>
+        <button onclick="snoozeInstall()" aria-label="14 天內不再提醒" class="shrink-0 text-emerald-500 px-1 text-base leading-none">×</button>
+      </div>
+
+      <!-- 備份提醒 -->
+      <div id="backup-reminder" class="hidden bg-sky-50 border border-sky-200 rounded-xl p-3 text-sky-900 text-xs flex items-center gap-2 shadow-sm">
+        <span class="flex-1">資料只存在這個瀏覽器裡，已經有一陣子沒備份了。</span>
+        <button id="btn-reminder-go" class="shrink-0 bg-sky-600 text-white px-2.5 py-1 rounded-lg font-medium">立即備份</button>
+        <button id="btn-reminder-snooze" aria-label="7 天內不再提醒" class="shrink-0 text-sky-500 px-1 text-base leading-none">×</button>
+      </div>
+
+      <!-- 日期與概覽卡片 -->
+      <div class="bg-white rounded-2xl p-4 shadow-sm border border-slate-100 space-y-3">
+        <div class="flex justify-between items-center">
+          <input type="date" id="tracker-date" class="font-bold text-lg text-slate-800 bg-transparent border-none focus:outline-none cursor-pointer">
+          <button id="btn-today" class="text-xs bg-slate-100 hover:bg-slate-200 text-slate-600 px-3 py-1.5 rounded-lg transition">回到今天</button>
+        </div>
+
+        <!-- 7 天日期列 -->
+        <div class="space-y-1.5">
+          <div class="flex items-center gap-1">
+            <button id="btn-week-prev" aria-label="前一週" class="shrink-0 w-7 h-12 flex items-center justify-center rounded-lg text-slate-500 hover:bg-slate-100 transition">
+              <i data-lucide="chevron-left" class="w-5 h-5"></i>
+            </button>
+            <div id="week-strip" class="flex-1 grid grid-cols-7 gap-1"></div>
+            <button id="btn-week-next" aria-label="後一週" class="shrink-0 w-7 h-12 flex items-center justify-center rounded-lg text-slate-500 hover:bg-slate-100 transition disabled:opacity-25 disabled:cursor-not-allowed">
+              <i data-lucide="chevron-right" class="w-5 h-5"></i>
+            </button>
+          </div>
+          <div class="flex justify-between items-center text-[10px] text-slate-400 px-1">
+            <span id="week-range"></span>
+            <span class="flex items-center gap-2">
+              <span class="flex items-center gap-1"><span class="w-2 h-2 rounded-sm bg-emerald-200 border border-emerald-400"></span>有紀錄</span>
+              <span class="flex items-center gap-1"><span class="w-2 h-2 rounded-sm bg-slate-100 border border-slate-300"></span>未記錄</span>
+              <span class="flex items-center gap-1"><span class="w-2 h-2 rounded-sm bg-red-200 border border-red-400"></span>超標</span>
+            </span>
+          </div>
+        </div>
+
+        <!-- 當日體重 -->
+        <div class="flex items-center justify-between gap-2 bg-slate-50 rounded-xl px-3 py-2 text-xs">
+          <div id="day-weight" class="text-slate-600 min-w-0"></div>
+          <button type="button" onclick="WT.openEntry(state.currentDate)" class="shrink-0 bg-white border border-slate-200 rounded-lg px-2.5 py-1 font-medium text-emerald-700 hover:bg-emerald-50">＋ 記錄體重</button>
+        </div>
+
+        <!-- 進度條儀表板 -->
+        <div class="grid grid-cols-2 gap-3 pt-1">
+          <div id="card-cal" class="bg-emerald-50 rounded-xl p-3 border border-emerald-100">
+            <div id="row-cal" class="flex justify-between items-center text-xs text-emerald-800 font-medium mb-1">
+              <span>總熱量 (kcal)</span>
+              <span id="cal-target-text">目標 1500</span>
+            </div>
+            <div class="text-xl font-black text-emerald-700" id="stat-total-cal">0</div>
+            <div id="track-cal" class="w-full bg-emerald-200 h-2 rounded-full mt-2 overflow-hidden">
+              <div id="bar-cal" class="bg-emerald-500 h-full transition-all duration-300" style="width: 0%"></div>
+            </div>
+          </div>
+
+          <div class="bg-blue-50 rounded-xl p-3 border border-blue-100">
+            <div class="flex justify-between items-center text-xs text-blue-800 font-medium mb-1">
+              <span>蛋白質 (g)</span>
+              <span id="protein-target-text">目標 110g</span>
+            </div>
+            <div class="text-xl font-black text-blue-700" id="stat-total-protein">0</div>
+            <div class="w-full bg-blue-200 h-2 rounded-full mt-2 overflow-hidden">
+              <div id="bar-protein" class="bg-blue-500 h-full transition-all duration-300" style="width: 0%"></div>
+            </div>
+          </div>
+        </div>
+      </div>
+
+      <!-- 烹調提示 banner -->
+      <div class="bg-amber-50 border border-amber-200 rounded-xl p-3 text-amber-900 text-xs flex items-center gap-2 shadow-sm">
+        <i data-lucide="info" class="w-4 h-4 text-amber-600 shrink-0"></i>
+        <span><strong>提示：</strong>不同的烹調方式（如加油煎炒、醬料、裹粉炸）可能會額外增加熱量與脂肪。</span>
+      </div>
+
+      <!-- 4 餐卡片 (早餐, 午餐, 晚餐, 消夜) -->
+      <div id="meals-container" class="space-y-4">
+        <!-- JS 動態生成餐點卡片 -->
+      </div>
+    </section>
+
+    <!-- TAB: 體重紀錄 -->
+    <section id="tab-weight" class="tab-content hidden space-y-4">
+      <div id="setup-card-weight"></div>
+
+      <details id="w-sd" class="w-card">
+        <summary class="font-bold text-sm text-slate-800 cursor-pointer select-none">
+          <i data-lucide="target" class="w-4 h-4 text-emerald-600 inline-block align-[-2px] mr-1"></i>體重目標與計畫
+        </summary>
+        <div class="mt-3 space-y-3 text-xs">
+          <p class="text-[11px] text-slate-500 leading-relaxed">身高、性別、年齡與每日熱量目標請到「設定」分頁填寫（BMI、TDEE 共用同一份身高）。</p>
+          <div>
+            <label class="w-lbl">模式</label>
+            <select id="w-md" class="w-inp">
+              <option value="lose">減重模式：朝目標體重逐日下降</option>
+              <option value="maintain">維持模式：守住目標體重附近</option>
+            </select>
+            <div id="w-mh" class="text-[11px] text-slate-500 leading-relaxed mt-1.5"></div>
+          </div>
+          <div class="grid grid-cols-2 gap-3">
+            <div><label class="w-lbl">目前 / 起始體重 kg</label><input type="number" step="0.1" id="w-w0" inputmode="decimal" class="w-inp"></div>
+            <div><label id="w-lw" class="w-lbl">目標體重 kg</label><input type="number" step="0.1" id="w-wt" inputmode="decimal" class="w-inp"></div>
+            <div id="w-gp"><label class="w-lbl">計畫方式</label>
+              <select id="w-pm" class="w-inp"><option value="rate">設定每週速率，自動算期間</option><option value="weeks">指定總週數</option></select></div>
+            <div id="w-gw"><label class="w-lbl">減重期間 週</label><input type="number" id="w-wk" inputmode="decimal" class="w-inp"></div>
+            <div id="w-gc"><label class="w-lbl">每週速率(安全上限) kg/週</label><input type="number" step="0.1" id="w-cap" value="0.7" inputmode="decimal" class="w-inp"></div>
+            <div><label class="w-lbl">起始日</label><input type="date" id="w-d0" class="w-inp"></div>
+            <div id="w-gb"><label class="w-lbl">維持區間 ± kg(允許上下浮動)</label><input type="number" step="0.1" id="w-bn" value="1" inputmode="decimal" class="w-inp"></div>
+          </div>
+          <div id="w-cs"></div>
+          <button id="w-sv" class="w-btn w-full">儲存設定</button>
+        </div>
+      </details>
+
+      <div class="w-card space-y-3">
+        <div id="w-kp" class="grid grid-cols-3 gap-x-2 gap-y-3"></div>
+        <div class="h-2.5 bg-slate-200 rounded-full overflow-hidden"><i id="w-pb" class="block h-full bg-emerald-500 transition-all duration-300" style="width:0%"></i></div>
+        <div id="w-fc" class="text-xs leading-relaxed"></div>
+        <div id="w-act"></div>
+      </div>
+
+      <div id="w-co" class="w-card"></div>
+
+      <div class="w-card space-y-3">
+        <h2 class="text-sm font-bold text-slate-800 flex items-center justify-between">
+          <span id="w-fh-text">新增紀錄</span><span id="w-tc" class="text-xs font-normal text-slate-400"></span>
+        </h2>
+        <div class="grid grid-cols-2 gap-3 text-xs">
+          <div class="col-span-2"><label class="w-lbl">時間</label><input type="datetime-local" id="w-ft" class="w-inp"></div>
+          <div><label class="w-lbl">體重 kg</label><input type="number" step="0.1" id="w-fw" inputmode="decimal" class="w-inp"></div>
+          <div><label class="w-lbl">時段</label><select id="w-fg" class="w-inp"><option>早晨空腹</option><option>睡前</option><option>餐後</option><option>運動後</option><option>一般</option></select></div>
+          <div class="col-span-2"><label class="w-lbl">備註(睡眠 / 聚餐 / 運動…)</label><input id="w-fn" class="w-inp"></div>
+        </div>
+        <div class="flex gap-2">
+          <button id="w-fs" class="w-btn flex-1">儲存紀錄</button>
+          <button id="w-fc2" class="w-btn-s hidden">取消編輯</button>
+        </div>
+      </div>
+
+      <div class="w-card space-y-2">
+        <h2 class="text-sm font-bold text-slate-800">體重趨勢</h2>
+        <div class="text-[11px] text-slate-500 flex flex-wrap gap-x-3">
+          <span><b class="text-emerald-600">●</b> 達標</span><span><b class="text-yellow-500">●</b> 小幅偏高</span><span><b class="text-red-600">●</b> 明顯偏離</span>
+          <span><b class="text-blue-600">┅</b> 目標線</span><span><b class="text-amber-500">─</b> 7日平均(趨勢)</span><span><b class="text-slate-400">▮</b> 未記錄</span>
+        </div>
+        <div id="w-rg" class="flex gap-1.5"><button data-r="7">近 7 天</button><button data-r="30">近 30 天</button><button data-r="all">全期</button></div>
+        <div class="overflow-x-auto"><svg id="w-ch" viewBox="0 0 640 300" style="width:100%;display:block"></svg></div>
+        <div id="w-ci" class="text-[11px] text-slate-500"></div>
+      </div>
+
+      <div class="w-card space-y-2">
+        <h2 class="text-sm font-bold text-slate-800">連續達成與徽章</h2>
+        <div id="w-st" class="text-sm"></div>
+        <div id="w-bd"></div>
+      </div>
+
+      <details class="w-card">
+        <summary class="font-bold text-sm text-slate-800 cursor-pointer select-none">
+          <i data-lucide="database" class="w-4 h-4 text-emerald-600 inline-block align-[-2px] mr-1"></i>體重資料 (CSV)
+        </summary>
+        <div class="mt-3 space-y-3 text-xs">
+          <p class="text-[11px] text-slate-500 leading-relaxed">這裡只處理「體重紀錄與目標」的 CSV（沿用原本體重紀錄 App 的格式）。包含飲食在內的整份備份，請到「設定」分頁匯出完整備份。</p>
+          <div id="w-le" class="text-slate-500"></div>
+          <div class="grid grid-cols-2 gap-2">
+            <button id="w-sh" class="w-btn-s">分享備份 CSV</button>
+            <button id="w-ec" class="w-btn-s">下載備份 CSV</button>
+            <button id="w-im" class="w-btn-s">匯入 CSV(覆蓋)</button>
+            <button id="w-mg" class="w-btn-s">合併匯入 CSV</button>
+          </div>
+          <input type="file" id="w-if" accept=".csv" class="hidden">
+          <button id="w-un" class="w-btn-s w-full hidden"></button>
+          <button id="w-legacy" class="w-btn-s w-full hidden">合併舊版「體重紀錄」資料</button>
+          <div class="text-[11px] text-slate-500 leading-relaxed"><b>覆蓋</b>：把目前所有體重紀錄換成檔案內容(含目標設定)。<b>合併</b>：以「日期+時間」判斷重複，只補上缺少的紀錄，不刪除也不修改現有紀錄；時間相同但體重不同時保留目前這一筆。兩種匯入前都會建立快照，可用「還原」復原。</div>
+          <div id="w-cn" class="text-slate-500"></div>
+          <div class="grid grid-cols-2 gap-2">
+            <button id="w-cl" class="w-btn-d">清除體重紀錄</button>
+            <button id="w-rs" class="w-btn-d">重置體重資料</button>
+          </div>
+          <div class="text-[11px] text-slate-500 leading-relaxed">清除：只刪體重紀錄，保留目標與提醒。重置：體重紀錄、目標、提醒、徽章全部清空。兩者都不會動到飲食紀錄，且會先自動下載 CSV 備份，並可用「還原」復原一次。</div>
+        </div>
+      </details>
+
+      <div class="w-card">
+        <h2 class="text-sm font-bold text-slate-800 flex items-center justify-between mb-1">
+          <span>紀錄列表</span>
+          <select id="w-tf" class="text-xs border border-slate-200 rounded-lg px-2 py-1 bg-white font-normal">
+            <option value="">全部時段</option><option>早晨空腹</option><option>睡前</option><option>餐後</option><option>運動後</option><option>一般</option>
+          </select>
+        </h2>
+        <div id="w-list"></div>
+      </div>
+
+
+    </section>
+
+    <!-- TAB 3: 趨勢圖表 -->
+    <section id="tab-trends" class="tab-content hidden space-y-5">
+      <div class="bg-white rounded-2xl p-4 shadow-sm border border-slate-100 space-y-3">
+        <h2 class="text-base font-bold text-slate-800 flex items-center gap-2">
+          <i data-lucide="line-chart" class="w-5 h-5 text-emerald-600"></i> 近 7 天熱量與體重趨勢
+        </h2>
+        <div class="h-64 w-full">
+          <canvas id="chart-trends"></canvas>
+        </div>
+      </div>
+
+      <!-- 減脂效果評估卡片 -->
+      <div class="bg-gradient-to-br from-emerald-500 to-teal-600 rounded-2xl p-4 text-white shadow-md space-y-2">
+        <h3 class="font-bold text-sm opacity-90">近 7 天減脂評估報告</h3>
+        <div class="text-2xl font-black" id="trend-summary-text">評估中...</div>
+        <p class="text-xs opacity-80 leading-relaxed" id="trend-summary-detail">請持續記錄 3 天以上的體重與飲食資料以獲得精準減脂評估。</p>
+      </div>
+    </section>
+
+    <!-- TAB 3: 庫存與範本管理 -->
+    <section id="tab-library" class="tab-content hidden space-y-5">
+      <!-- 頂部操作按鈕區 (匯出/匯入/復原) -->
+      <div class="bg-white rounded-2xl p-4 shadow-sm border border-slate-100 space-y-3">
+        <h2 class="text-sm font-bold text-slate-800 flex items-center gap-2">
+          <i data-lucide="folder-up" class="w-4 h-4 text-emerald-600"></i> CSV 資料備份與還原
+        </h2>
+        <div class="grid grid-cols-2 gap-2 text-xs">
+          <button id="btn-export-foods" class="bg-emerald-50 text-emerald-700 border border-emerald-200 rounded-xl px-3 py-2 font-medium flex items-center justify-center gap-1.5 hover:bg-emerald-100">
+            <i data-lucide="download" class="w-3.5 h-3.5"></i> 匯出食材庫 CSV
+          </button>
+          <label class="bg-emerald-50 text-emerald-700 border border-emerald-200 rounded-xl px-3 py-2 font-medium flex items-center justify-center gap-1.5 hover:bg-emerald-100 cursor-pointer">
+            <i data-lucide="upload" class="w-3.5 h-3.5"></i> 匯入食材庫 CSV
+            <input type="file" id="file-import-foods" accept=".csv" class="hidden">
+          </label>
+          <button id="btn-export-templates" class="bg-blue-50 text-blue-700 border border-blue-200 rounded-xl px-3 py-2 font-medium flex items-center justify-center gap-1.5 hover:bg-blue-100">
+            <i data-lucide="download" class="w-3.5 h-3.5"></i> 匯出範本 CSV
+          </button>
+          <label class="bg-blue-50 text-blue-700 border border-blue-200 rounded-xl px-3 py-2 font-medium flex items-center justify-center gap-1.5 hover:bg-blue-100 cursor-pointer">
+            <i data-lucide="upload" class="w-3.5 h-3.5"></i> 匯入範本 CSV
+            <input type="file" id="file-import-templates" accept=".csv" class="hidden">
+          </label>
+        </div>
+        <div class="grid grid-cols-1 gap-2 text-xs">
+          <button id="btn-sample-csv" class="bg-white text-emerald-700 border border-emerald-300 rounded-xl px-3 py-2 font-medium hover:bg-emerald-50">📄 下載「食材範例檔」（照著改最快）</button>
+        </div>
+        <details class="text-[11px] text-slate-500 leading-relaxed">
+          <summary class="cursor-pointer select-none text-slate-600 font-medium">食材 CSV 怎麼填？</summary>
+          <ul class="list-disc pl-4 mt-1 space-y-0.5">
+            <li>用 Excel / Google 試算表開啟，改完存成 <b>CSV UTF-8</b>。</li>
+            <li><b>分類</b>：固定蛋白質、蔬菜、主肉類、豆乳蛋白、澱粉、水果、油脂堅果、作弊食物、飲料湯品。</li>
+            <li><b>營養基準</b>：「每100g」「每100ml」，或照包裝標示填「每1杯」「每1包」「每1片」…，熱量與蛋白質就填標示上的數字。</li>
+            <li><b>單位名稱 + 每單位重量</b>：想用「顆、片」輸入時才填（例：雞蛋 顆 60）。</li>
+            <li><b>別名</b>用 / 分隔，搜尋時會一起比對（例：地瓜 → 番薯 / 蕃薯）。</li>
+            <li><b>id</b> 可以留空：系統用名稱比對，同名就更新、沒有就新增。匯入前會先預覽，匯入後可復原。</li>
+          </ul>
+        </details>
+        <button id="btn-reset-default" class="w-full bg-slate-100 text-slate-600 border border-slate-200 rounded-xl py-2 text-xs font-medium hover:bg-slate-200 transition">
+          恢復指南預設食材與範本
+        </button>
+      </div>
+
+      <!-- 食材庫管理 -->
+      <div class="bg-white rounded-2xl p-4 shadow-sm border border-slate-100 space-y-3">
+        <div class="flex justify-between items-center">
+          <h2 class="text-base font-bold text-slate-800 flex items-center gap-2">
+            <i data-lucide="apple" class="w-5 h-5 text-emerald-600"></i> 食材資料庫 (熟重計算)
+          </h2>
+          <button id="btn-open-add-food" class="bg-emerald-600 text-white px-3 py-1.5 rounded-xl text-xs font-medium hover:bg-emerald-700 transition flex items-center gap-1">
+            <i data-lucide="plus" class="w-4 h-4"></i> 新增食材
+          </button>
+        </div>
+        <input id="food-search" type="search" oninput="renderLibrary()" placeholder="搜尋食材名稱…" class="w-full bg-slate-50 border border-slate-200 rounded-xl px-3 py-2 text-xs focus:outline-none focus:ring-2 focus:ring-emerald-500">
+        <div id="food-list-container" class="space-y-2 max-h-80 overflow-y-auto pr-1">
+          <!-- JS 動態列表 -->
+        </div>
+      </div>
+
+      <!-- 範本管理 -->
+      <div class="bg-white rounded-2xl p-4 shadow-sm border border-slate-100 space-y-3">
+        <div class="flex justify-between items-center">
+          <h2 class="text-base font-bold text-slate-800 flex items-center gap-2">
+            <i data-lucide="book-open" class="w-5 h-5 text-emerald-600"></i> 我的飲食範本
+          </h2>
+          <button id="btn-open-add-tpl" onclick="openTplEditor(null)" class="bg-emerald-600 text-white px-3 py-1.5 rounded-xl text-xs font-medium hover:bg-emerald-700 transition flex items-center gap-1">
+            <i data-lucide="plus" class="w-4 h-4"></i> 新增範本
+          </button>
+        </div>
+        <p class="text-xs text-slate-500 leading-relaxed">點任何一個範本可以查看並編輯內容；「＋ 新增」從空白建立。也可以在「今日飲食」把一餐組好，按該餐的「範本」→「存成範本」。</p>
+        <div id="template-list-container" class="space-y-2 max-h-80 overflow-y-auto pr-1">
+          <!-- JS 動態列表 -->
+        </div>
+      </div>
+    </section>
+
+    <!-- TAB 4: 個人設定 -->
+    <section id="tab-profile" class="tab-content hidden space-y-5">
+
+      <!-- 熱量基準參考表 -->
+      <div class="bg-white rounded-2xl p-4 shadow-sm border border-slate-100 space-y-3 text-xs">
+        <h3 class="font-bold text-sm text-slate-800 flex items-center gap-2">
+          <i data-lucide="calculator" class="w-4 h-4 text-emerald-600"></i> 成人每日熱量需求參考表 (kcal/天)
+        </h3>
+        <p class="text-slate-500 text-[11px] leading-relaxed">
+          數值以中等活動量估算，可依據個人的實際活動量與減脂/增肌目標微調：
+        </p>
+        <div id="cal-ref-table" class="overflow-x-auto">
+          <table class="w-full text-left border-collapse">
+            <thead>
+              <tr class="bg-slate-100 text-slate-700 font-bold">
+                <th class="p-2 rounded-l-lg">類別</th>
+                <th class="p-2">減脂期</th>
+                <th class="p-2">維持期</th>
+                <th class="p-2 rounded-r-lg">增肌期</th>
+              </tr>
+            </thead>
+            <tbody class="divide-y divide-slate-100">
+              <tr>
+                <td class="p-2 font-semibold text-slate-800">成年女性</td>
+                <td class="p-2 text-emerald-600 font-bold">1200 ~ 1400</td>
+                <td class="p-2 text-slate-600">1600 ~ 1800</td>
+                <td class="p-2 text-blue-600 font-bold">1900 ~ 2100</td>
+              </tr>
+              <tr>
+                <td class="p-2 font-semibold text-slate-800">成年男性</td>
+                <td class="p-2 text-emerald-600 font-bold">1400 ~ 1600</td>
+                <td class="p-2 text-slate-600">1900 ~ 2200</td>
+                <td class="p-2 text-blue-600 font-bold">2300 ~ 2600</td>
+              </tr>
+            </tbody>
+          </table>
+        </div>
+      </div>
+
+      <div class="bg-white rounded-2xl p-4 shadow-sm border border-slate-100 space-y-4">
+        <h2 class="text-base font-bold text-slate-800 flex items-center gap-2">
+          <i data-lucide="user" class="w-5 h-5 text-emerald-600"></i> 個人身體資料與熱量目標設定
+        </h2>
+        <div class="space-y-3">
+          <div>
+            <label class="text-xs font-semibold text-slate-600 block mb-1">身高 (cm)</label>
+            <input type="number" id="profile-height" oninput="renderBodyCard()" class="w-full bg-slate-50 border border-slate-200 rounded-xl px-3 py-2 text-sm focus:outline-none focus:ring-2 focus:ring-emerald-500">
+          </div>
+          <div class="grid grid-cols-2 gap-3">
+            <div>
+              <label class="text-xs font-semibold text-slate-600 block mb-1">性別 (估算 TDEE 用)</label>
+              <select id="profile-sex" onchange="renderBodyCard()" class="w-full bg-slate-50 border border-slate-200 rounded-xl px-3 py-2 text-sm focus:outline-none focus:ring-2 focus:ring-emerald-500">
+                <option value="">請選擇</option>
+                <option value="male">男</option>
+                <option value="female">女</option>
+              </select>
+            </div>
+            <div>
+              <label class="text-xs font-semibold text-slate-600 block mb-1">年齡</label>
+              <input type="number" id="profile-age" inputmode="numeric" oninput="renderBodyCard()" class="w-full bg-slate-50 border border-slate-200 rounded-xl px-3 py-2 text-sm focus:outline-none focus:ring-2 focus:ring-emerald-500">
+            </div>
+          </div>
+          <div>
+            <label class="text-xs font-semibold text-slate-600 block mb-1">日常活動量</label>
+            <select id="profile-activity" onchange="renderBodyCard()" class="w-full bg-slate-50 border border-slate-200 rounded-xl px-3 py-2 text-sm focus:outline-none focus:ring-2 focus:ring-emerald-500">
+              <option value="1.2">久坐（辦公室、幾乎不運動）</option>
+              <option value="1.375">輕度（每週運動 1–3 天）</option>
+              <option value="1.55">中度（每週運動 3–5 天）</option>
+              <option value="1.725">高度（每週運動 6–7 天或勞力工作）</option>
+            </select>
+          </div>
+          <div>
+            <label class="text-xs font-semibold text-slate-600 block mb-1">目標熱量 (kcal / 天)</label>
+            <input type="number" id="profile-cal-target" class="w-full bg-slate-50 border border-slate-200 rounded-xl px-3 py-2 text-sm focus:outline-none focus:ring-2 focus:ring-emerald-500">
+          </div>
+          <div>
+            <label class="text-xs font-semibold text-slate-600 block mb-1">目標蛋白質 (g / 天)</label>
+            <input type="number" id="profile-protein-target" class="w-full bg-slate-50 border border-slate-200 rounded-xl px-3 py-2 text-sm focus:outline-none focus:ring-2 focus:ring-emerald-500">
+          </div>
+          <button id="btn-save-profile" class="w-full bg-emerald-600 text-white py-2.5 rounded-xl font-bold text-sm hover:bg-emerald-700 transition">儲存設定</button>
+        </div>
+      </div>
+
+      <!-- 身體數據：BMI / BMR / TDEE -->
+      <div class="bg-white rounded-2xl p-4 shadow-sm border border-slate-100 space-y-3 text-xs">
+        <h3 class="font-bold text-sm text-slate-800 flex items-center gap-2">
+          <i data-lucide="calculator" class="w-4 h-4 text-emerald-600"></i> 身體數據與每日消耗估算(以最新一筆體重計算)
+        </h3>
+        <div id="body-card-content"></div>
+      </div>
+
+      <!-- 外觀 -->
+      <div class="w-card space-y-3 text-xs">
+        <h3 class="font-bold text-sm text-slate-800 flex items-center gap-2"><i data-lucide="moon" class="w-4 h-4 text-emerald-600"></i> 外觀</h3>
+        <div id="theme-seg" class="grid grid-cols-3 gap-2"></div>
+        <p class="text-[11px] text-slate-500 leading-relaxed">「自動」會跟著手機的深色 / 淺色設定走。</p>
+      </div>
+
+      <!-- 量體重提醒 -->
+      <div class="w-card space-y-3 text-xs">
+        <h3 class="font-bold text-sm text-slate-800 flex items-center gap-2"><i data-lucide="bell" class="w-4 h-4 text-emerald-600"></i> 量體重提醒</h3>
+        <label class="flex items-center gap-2 text-slate-700"><input type="checkbox" id="w-rm" class="w-5 h-5 accent-emerald-600"> 開啟提醒</label>
+        <div class="grid grid-cols-2 gap-3">
+          <div><label class="w-lbl">晨起</label><input type="time" id="w-r1" class="w-inp"></div>
+          <div><label class="w-lbl">睡前</label><input type="time" id="w-r2" class="w-inp"></div>
+        </div>
+        <p class="text-[11px] text-amber-700 leading-relaxed">提醒僅在網頁開啟（含背景分頁）時觸發；iOS 須先「加入主畫面」。</p>
+      </div>
+
+      <!-- 完整備份 (JSON) -->
+      <div class="bg-white rounded-2xl p-4 shadow-sm border border-emerald-200 space-y-3">
+        <h2 class="text-sm font-bold text-slate-800 flex items-center gap-2">
+          <i data-lucide="shield-check" class="w-4 h-4 text-emerald-600"></i> 完整備份 (JSON)
+        </h2>
+        <p class="text-xs text-slate-500 leading-relaxed">包含飲食紀錄、體重紀錄與目標、食材庫、範本與個人設定。資料只存在這個瀏覽器中，不會自動同步，建議定期備份。</p>
+        <div id="backup-status" class="text-xs font-medium"></div>
+        <div id="storage-note" class="text-[11px] text-slate-500 leading-relaxed"></div>
+        <div class="grid grid-cols-2 gap-2 text-xs">
+          <button id="btn-export-backup" class="bg-emerald-600 text-white rounded-xl px-3 py-2.5 font-medium flex items-center justify-center gap-1.5 hover:bg-emerald-700">
+            <i data-lucide="download" class="w-3.5 h-3.5"></i> 匯出完整備份
+          </button>
+          <label class="bg-white text-emerald-700 border border-emerald-300 rounded-xl px-3 py-2.5 font-medium flex items-center justify-center gap-1.5 hover:bg-emerald-50 cursor-pointer">
+            <i data-lucide="upload" class="w-3.5 h-3.5"></i> 匯入完整備份
+            <input type="file" id="file-import-backup" accept=".json,application/json" class="hidden">
+          </label>
+        </div>
+        <button id="btn-restore-all" class="hidden w-full text-xs bg-slate-100 text-slate-700 rounded-xl px-3 py-2.5 font-medium hover:bg-slate-200"></button>
+      </div>
+
+    </section>
+  </main>
+
+  <!-- Bottom Navigation Bar -->
+  <nav class="safe-bottom fixed bottom-0 left-0 right-0 bg-white border-t border-slate-200 z-30 shadow-lg">
+    <div class="max-w-2xl mx-auto flex justify-around py-2">
+      <button data-target="tab-tracker" class="nav-btn active text-emerald-600 flex flex-col items-center gap-1 text-[11px] font-medium min-w-[56px]">
+        <i data-lucide="calendar" class="w-5 h-5"></i>
+        <span>今日飲食</span>
+      </button>
+      <button data-target="tab-weight" class="nav-btn text-slate-400 hover:text-slate-600 flex flex-col items-center gap-1 text-[11px] font-medium min-w-[56px]">
+        <i data-lucide="scale" class="w-5 h-5"></i>
+        <span>體重</span>
+      </button>
+      <button data-target="tab-trends" class="nav-btn text-slate-400 hover:text-slate-600 flex flex-col items-center gap-1 text-[11px] font-medium min-w-[56px]">
+        <i data-lucide="trending-down" class="w-5 h-5"></i>
+        <span>趨勢</span>
+      </button>
+      <button data-target="tab-library" class="nav-btn text-slate-400 hover:text-slate-600 flex flex-col items-center gap-1 text-[11px] font-medium min-w-[56px]">
+        <i data-lucide="database" class="w-5 h-5"></i>
+        <span>食材範本</span>
+      </button>
+      <button data-target="tab-profile" class="nav-btn text-slate-400 hover:text-slate-600 flex flex-col items-center gap-1 text-[11px] font-medium min-w-[56px]">
+        <i data-lucide="settings" class="w-5 h-5"></i>
+        <span>設定</span>
+      </button>
+    </div>
+  </nav>
+
+  <!-- MODAL: 新增/編輯食材 Modal -->
+  <div id="modal-food" class="fixed inset-0 bg-black/50 z-50 flex items-center justify-center p-4 hidden">
+    <div class="bg-white rounded-2xl max-w-sm w-full p-5 space-y-4 shadow-2xl">
+      <h3 id="modal-food-title" class="text-base font-bold text-slate-800">編輯食材</h3>
+      <input type="hidden" id="food-edit-id">
+      <div class="space-y-3 text-xs">
+        <div>
+          <label class="font-semibold text-slate-600 block mb-1">食材名稱</label>
+          <input type="text" id="food-name" class="w-full border border-slate-200 rounded-xl px-3 py-2 text-sm focus:outline-none focus:ring-2 focus:ring-emerald-500">
+        </div>
+        <div>
+          <label class="font-semibold text-slate-600 block mb-1">積木分類</label>
+          <select id="food-category" onchange="updateFoodModalLabels()" class="w-full border border-slate-200 rounded-xl px-3 py-2 text-sm focus:outline-none focus:ring-2 focus:ring-emerald-500 bg-white">
+            <option value="fixed">固定蛋白質</option>
+            <option value="vege">纖維 (蔬菜)</option>
+            <option value="protein1">蛋白質 1 (主肉類)</option>
+            <option value="protein2">蛋白質 2 (副蛋白質/豆腐)</option>
+            <option value="carb">澱粉 (全穀雜糧)</option>
+            <option value="fruit">水果</option>
+            <option value="fat">油脂 / 堅果</option>
+            <option value="cheat">作弊食物 / 外食</option>
+            <option value="drink">飲料</option>
+          </select>
+        </div>
+        <div>
+          <label class="font-semibold text-slate-600 block mb-1">營養標示基準</label>
+          <select id="food-basis" onchange="updateFoodModalLabels()" class="w-full border border-slate-200 rounded-xl px-3 py-2 text-sm focus:outline-none focus:ring-2 focus:ring-emerald-500 bg-white">
+            <option value="per100">每 100g / 100ml（秤重食物）</option>
+            <option value="unit">每 1 單位（每杯、每包、每個…）</option>
+          </select>
+        </div>
+        <div class="grid grid-cols-2 gap-2">
+          <div>
+            <label id="lbl-food-cal" class="font-semibold text-slate-600 block mb-1">每 100g 熱量 (kcal)</label>
+            <input type="number" id="food-cal" class="w-full border border-slate-200 rounded-xl px-3 py-2 text-sm focus:outline-none focus:ring-2 focus:ring-emerald-500">
+          </div>
+          <div>
+            <label id="lbl-food-protein" class="font-semibold text-slate-600 block mb-1">每 100g 蛋白質 (g)</label>
+            <input type="number" step="0.1" id="food-protein" class="w-full border border-slate-200 rounded-xl px-3 py-2 text-sm focus:outline-none focus:ring-2 focus:ring-emerald-500">
+          </div>
+        </div>
+      </div>
+      <div class="text-xs space-y-1">
+        <label class="font-semibold text-slate-600 block mb-1">別名 (選填，搜尋用，用 / 分隔)</label>
+        <input type="text" id="food-aliases" placeholder="例：番薯 / 蕃薯" class="w-full border border-slate-200 rounded-xl px-3 py-2 text-sm focus:outline-none focus:ring-2 focus:ring-emerald-500">
+      </div>
+      <div class="text-xs space-y-1">
+        <div class="grid grid-cols-2 gap-2">
+          <div>
+            <label class="font-semibold text-slate-600 block mb-1">計數單位 (選填)</label>
+            <input type="text" id="food-piece-name" oninput="updateFoodModalLabels()" placeholder="例：顆、片、杯" class="w-full border border-slate-200 rounded-xl px-3 py-2 text-sm focus:outline-none focus:ring-2 focus:ring-emerald-500">
+          </div>
+          <div>
+            <label id="lbl-food-piece" class="font-semibold text-slate-600 block mb-1">每單位重量 g</label>
+            <input type="number" id="food-piece-g" placeholder="例：60" class="w-full border border-slate-200 rounded-xl px-3 py-2 text-sm focus:outline-none focus:ring-2 focus:ring-emerald-500">
+          </div>
+        </div>
+        <p class="text-[11px] text-slate-400">兩格都填後，記錄時直接輸入數量（可輸入 0.5），系統自動換算。</p>
+      </div>
+      <div class="flex gap-2 pt-2">
+        <button id="btn-close-food-modal" class="flex-1 bg-slate-100 text-slate-600 py-2 rounded-xl font-medium text-xs">取消</button>
+        <button id="btn-save-food" class="flex-1 bg-emerald-600 text-white py-2 rounded-xl font-medium text-xs hover:bg-emerald-700">儲存</button>
+      </div>
+    </div>
+  </div>
+
+  <!-- MODAL: 手動輸入熱量 (外食 / 其他) -->
+  <div id="modal-manual" class="fixed inset-0 bg-black/50 z-50 flex items-start justify-center p-4 pt-16 hidden">
+    <div class="bg-white rounded-2xl max-w-sm w-full p-5 space-y-4 shadow-2xl">
+      <h3 id="manual-title" class="text-base font-bold text-slate-800">手動輸入熱量</h3>
+      <input type="hidden" id="manual-meal">
+      <input type="hidden" id="manual-index">
+      <div class="space-y-3 text-xs">
+        <div>
+          <label class="font-semibold text-slate-600 block mb-1">名稱 (選填)</label>
+          <input type="text" id="manual-name" list="manual-names" oninput="manualNameInput()" placeholder="例：便當、滷肉飯、手搖飲" class="w-full border border-slate-200 rounded-xl px-3 py-2 text-sm focus:outline-none focus:ring-2 focus:ring-amber-400">
+          <datalist id="manual-names"></datalist>
+        </div>
+        <div class="grid grid-cols-2 gap-2">
+          <div>
+            <label class="font-semibold text-slate-600 block mb-1">熱量 (kcal)</label>
+            <input type="number" id="manual-cal" inputmode="decimal" min="0" class="w-full border border-slate-200 rounded-xl px-3 py-2 text-sm focus:outline-none focus:ring-2 focus:ring-amber-400">
+          </div>
+          <div>
+            <label class="font-semibold text-slate-600 block mb-1">蛋白質 g (選填)</label>
+            <input type="number" id="manual-protein" inputmode="decimal" min="0" step="0.1" class="w-full border border-slate-200 rounded-xl px-3 py-2 text-sm focus:outline-none focus:ring-2 focus:ring-amber-400">
+          </div>
+        </div>
+        <p class="text-[11px] text-slate-400">輸入過的名稱下次會出現在建議中，選到時自動帶入上次的熱量。外食熱量多為估計值，可抓偏保守。</p>
+      </div>
+      <div class="flex gap-2 pt-1">
+        <button onclick="closeModal('modal-manual')" class="flex-1 bg-slate-100 text-slate-600 py-2 rounded-xl font-medium text-xs">取消</button>
+        <button onclick="saveManual()" class="flex-1 bg-amber-600 text-white py-2 rounded-xl font-medium text-xs hover:bg-amber-700">儲存</button>
+      </div>
+    </div>
+  </div>
+
+  <!-- MODAL: 選擇食物 (搜尋 + 常用) -->
+  <div id="modal-picker" onclick="if(event.target===this) closeModal('modal-picker')" class="fixed inset-0 bg-black/50 z-50 flex items-start justify-center p-4 pt-10 hidden">
+    <div class="bg-white rounded-2xl max-w-sm w-full p-4 space-y-3 shadow-2xl">
+      <div class="flex justify-between items-center">
+        <h3 id="picker-title" class="text-base font-bold text-slate-800"></h3>
+        <button onclick="closeModal('modal-picker')" class="text-xs text-slate-500 bg-slate-100 px-2.5 py-1 rounded-lg">關閉</button>
+      </div>
+      <input id="picker-search" type="search" oninput="renderPickerList()" placeholder="搜尋食物名稱…" class="w-full bg-slate-50 border border-slate-200 rounded-xl px-3 py-2 text-sm focus:outline-none focus:ring-2 focus:ring-emerald-500">
+      <div id="picker-list" class="space-y-1.5 max-h-[55vh] overflow-y-auto pr-1 text-xs"></div>
+      <p class="text-[11px] text-slate-400">點右側 ☆ 設為常用，常用食物會排在最前面。</p>
+    </div>
+  </div>
+
+  <!-- Toast -->
+  <!-- 食材 CSV 匯入預覽 -->
+  <div id="modal-csv-preview" class="hidden fixed inset-0 bg-black/50 z-[55] flex items-start justify-center p-4 pt-12">
+    <div class="bg-white rounded-2xl max-w-sm w-full p-5 space-y-3 shadow-2xl text-xs">
+      <h3 class="text-base font-bold text-slate-800">匯入食材預覽</h3>
+      <div id="csv-preview-body" class="space-y-2 max-h-[50vh] overflow-y-auto"></div>
+      <label class="flex items-center gap-2 text-slate-600"><input type="checkbox" id="csv-add-only" class="w-4 h-4 accent-emerald-600" onchange="renderCsvPreview()"> 只新增，不更新已存在的食材</label>
+      <div class="flex gap-2 pt-1">
+        <button type="button" onclick="closeCsvPreview()" class="flex-1 bg-slate-100 text-slate-600 py-2 rounded-xl font-medium">取消</button>
+        <button type="button" id="csv-apply-btn" onclick="applyCsvImport()" class="flex-1 bg-emerald-600 text-white py-2 rounded-xl font-medium">匯入</button>
+      </div>
+    </div>
+  </div>
+
+  <!-- 首次引導 -->
+  <div id="onboarding" class="hidden fixed inset-0 z-[70] bg-slate-50 overflow-y-auto">
+    <div class="max-w-md mx-auto p-6 pt-10 pb-16"><div id="ob-body"></div></div>
+  </div>
+
+  <!-- 安裝教學 -->
+  <div id="modal-install" class="fixed inset-0 bg-black/50 z-[75] flex items-center justify-center p-4 hidden">
+    <div class="bg-white rounded-2xl max-w-sm w-full p-5 space-y-3 shadow-2xl text-sm text-slate-700 leading-relaxed">
+      <h3 class="text-base font-bold text-slate-800">📲 加入主畫面</h3>
+      <div id="install-help-body"></div>
+      <button onclick="closeModal('modal-install')" class="w-btn w-full">知道了</button>
+    </div>
+  </div>
+
+  <div id="toast" class="hidden fixed left-1/2 -translate-x-1/2 bottom-24 z-[60] w-max max-w-[90%] bg-slate-800 text-white text-xs leading-relaxed px-4 py-2.5 rounded-2xl shadow-lg text-center"></div>
+
+  <!-- 首次使用：資料儲存提醒 -->
+  <div id="modal-intro" class="fixed inset-0 bg-black/50 z-50 flex items-center justify-center p-4 hidden">
+    <div class="bg-white rounded-2xl max-w-sm w-full p-5 space-y-3 shadow-2xl text-sm text-slate-700 leading-relaxed">
+      <h3 class="text-base font-bold text-slate-800">💾 資料儲存提醒</h3>
+      <p>你的飲食與體重紀錄都只儲存在這個裝置的瀏覽器中，<b>不會自動同步</b>到其他手機或電腦。</p>
+      <p>清除瀏覽器網站資料、重設裝置或更換裝置，紀錄可能會遺失。</p>
+      <p>建議定期到「設定」分頁匯出「完整備份」。</p>
+      <button id="w-ok1" class="w-btn w-full">知道了，開始使用</button>
+    </div>
+  </div>
+
+  <!-- MODAL: 範本編輯 (全螢幕) -->
+  <div id="modal-tpl-edit" class="hidden fixed inset-0 z-[45] bg-slate-50 overflow-y-auto">
+    <div class="max-w-2xl mx-auto p-4 pb-28 space-y-3">
+      <div class="flex items-center justify-between">
+        <h3 class="text-base font-bold text-slate-800">編輯範本（單餐）</h3>
+        <button type="button" onclick="closeTplEditor()" class="text-xs bg-slate-200 text-slate-700 px-3 py-1.5 rounded-lg font-medium">關閉</button>
+      </div>
+      <div class="w-card space-y-1">
+        <label class="w-lbl">範本名稱</label>
+        <input id="tpl-edit-name" oninput="tplDraft.name = this.value; tplDraft.dirty = true" class="w-inp" placeholder="例：減脂午餐 A、增肌早餐">
+      </div>
+      <div id="tpl-edit-sum"></div>
+      <div id="tpl-edit-body" class="space-y-3 text-xs"></div>
+      <div class="grid grid-cols-3 gap-2 text-xs pt-1">
+        <button type="button" onclick="saveTplEditor()" class="w-btn col-span-3">儲存範本</button>
+        <button type="button" onclick="dupTplEditor()" class="w-btn-s">另存新範本</button>
+        <button type="button" id="tpl-edit-del" onclick="delTplEditor()" class="w-btn-d col-span-2">刪除範本</button>
+      </div>
+    </div>
+  </div>
+
+  <!-- MODAL: 存成範本 -->
+  <div id="modal-tpl-save" class="fixed inset-0 bg-black/50 z-50 flex items-start justify-center p-4 pt-12 hidden">
+    <div class="bg-white rounded-2xl max-w-sm w-full p-5 space-y-3 shadow-2xl text-xs">
+      <h3 class="text-base font-bold text-slate-800">存成範本</h3>
+      <div>
+        <label id="tpl-save-meal-label" class="font-semibold text-slate-600 block mb-1">來源餐點</label>
+        <select id="tpl-save-meal" class="w-full border border-slate-200 rounded-xl px-3 py-2 text-sm bg-white focus:outline-none focus:ring-2 focus:ring-emerald-500"></select>
+      </div>
+      <div>
+        <label class="font-semibold text-slate-600 block mb-1">存成</label>
+        <select id="tpl-save-target" onchange="tplSaveTargetChanged()" class="w-full border border-slate-200 rounded-xl px-3 py-2 text-sm bg-white focus:outline-none focus:ring-2 focus:ring-emerald-500"></select>
+      </div>
+      <div>
+        <label class="font-semibold text-slate-600 block mb-1">範本名稱</label>
+        <input type="text" id="tpl-save-name" placeholder="例：減脂午餐 A、增肌日常" class="w-full border border-slate-200 rounded-xl px-3 py-2 text-sm focus:outline-none focus:ring-2 focus:ring-emerald-500">
+      </div>
+      <p class="text-[11px] text-slate-400 leading-relaxed">範本記錄食物與份量，手動輸入的外食不會存入。要修改範本：套用到某一餐、調整後，選「覆蓋」同一個範本即可。</p>
+      <div class="flex gap-2 pt-1">
+        <button onclick="closeModal('modal-tpl-save')" class="flex-1 bg-slate-100 text-slate-600 py-2 rounded-xl font-medium">取消</button>
+        <button onclick="saveTemplate()" class="flex-1 bg-emerald-600 text-white py-2 rounded-xl font-medium hover:bg-emerald-700">儲存</button>
+      </div>
+    </div>
+  </div>
+
+  <!-- MODAL: 套用範本 Modal -->
+  <div id="modal-tpl" class="fixed inset-0 bg-black/50 z-50 flex items-center justify-center p-4 hidden">
+    <div class="bg-white rounded-2xl max-w-sm w-full p-5 space-y-4 shadow-2xl">
+      <h3 class="text-base font-bold text-slate-800">套用範本</h3>
+      <input type="hidden" id="tpl-target-meal">
+      <div id="modal-tpl-list" class="space-y-2 max-h-72 overflow-y-auto pr-1 text-xs">
+        <!-- JS 動態渲染可套用範本 -->
+      </div>
+      <button onclick="openTplSave(byId('tpl-target-meal').value)" class="w-full bg-emerald-600 text-white py-2 rounded-xl font-medium text-xs hover:bg-emerald-700">＋ 把這一餐存成範本</button>
+      <button id="btn-close-tpl-modal" class="w-full bg-slate-100 text-slate-600 py-2 rounded-xl font-medium text-xs">取消</button>
+    </div>
+  </div>
+
+  <script src="js/weight.js"></script>
+  <script>
+    // --- 預設食材庫 (每 100g / 100ml；肉、菜、澱粉以熟重計) ---
+    const DEFAULT_FOODS = [
+      // 1. 固定蛋白質 (蛋)
+      { id: "f1", name: "雞蛋", category: "fixed", calPer100: 155, proteinPer100: 13, unit: "g", pieceName: "顆", pieceG: 55 , fav: true },
+      { id: "e1", name: "雞蛋白 (水煮)", category: "fixed", calPer100: 52, proteinPer100: 11, unit: "g", pieceName: "顆", pieceG: 33 },
+      { id: "e2", name: "茶葉蛋", category: "fixed", calPer100: 150, proteinPer100: 13, unit: "g", pieceName: "顆", pieceG: 55 },
+
+      // 2. 蔬菜 (熟重；生食者標註生)
+      { id: "v1", name: "高麗菜 (熟重)", category: "vege", calPer100: 25, proteinPer100: 1.3, unit: "g" },
+      { id: "v2", name: "青花菜 (熟重)", category: "vege", calPer100: 35, proteinPer100: 3.7, unit: "g" },
+      { id: "v3", name: "大白菜 (熟重)", category: "vege", calPer100: 18, proteinPer100: 1.2, unit: "g" },
+      { id: "v4", name: "菠菜 / 空心菜 (熟重)", category: "vege", calPer100: 24, proteinPer100: 2.5, unit: "g" },
+      { id: "v5", name: "玉米筍 (熟重)", category: "vege", calPer100: 30, proteinPer100: 1.5, unit: "g" },
+      { id: "v6", name: "金針菇 / 鴻喜菇 (熟重)", category: "vege", calPer100: 32, proteinPer100: 2.8, unit: "g" },
+      { id: "v7", name: "白蘿蔔 (熟重)", category: "vege", calPer100: 18, proteinPer100: 0.7, unit: "g" },
+      { id: "v8", name: "地瓜葉 (熟重)", category: "vege", calPer100: 25, proteinPer100: 2.8, unit: "g" },
+      { id: "v9", name: "小白菜 / 青江菜 (熟重)", category: "vege", calPer100: 15, proteinPer100: 1.5, unit: "g" },
+      { id: "v10", name: "白花椰菜 (熟重)", category: "vege", calPer100: 25, proteinPer100: 2.2, unit: "g" },
+      { id: "v11", name: "蘆筍 (熟重)", category: "vege", calPer100: 22, proteinPer100: 2.4, unit: "g" },
+      { id: "v12", name: "彩椒 (熟重)", category: "vege", calPer100: 30, proteinPer100: 1.0, unit: "g" },
+      { id: "v13", name: "洋蔥 (熟重)", category: "vege", calPer100: 42, proteinPer100: 1.2, unit: "g" },
+      { id: "v14", name: "香菇 / 蘑菇 (熟重)", category: "vege", calPer100: 30, proteinPer100: 2.8, unit: "g" },
+      { id: "v15", name: "綠豆芽 (熟重)", category: "vege", calPer100: 25, proteinPer100: 2.5, unit: "g" },
+      { id: "v16", name: "茄子 (熟重)", category: "vege", calPer100: 30, proteinPer100: 1.0, unit: "g" },
+      { id: "v17", name: "秋葵 (熟重)", category: "vege", calPer100: 30, proteinPer100: 2.0, unit: "g" },
+      { id: "v18", name: "四季豆 (熟重)", category: "vege", calPer100: 35, proteinPer100: 1.9, unit: "g" },
+      { id: "v19", name: "小黃瓜 (生)", category: "vege", calPer100: 15, proteinPer100: 0.7, unit: "g" },
+      { id: "v20", name: "綜合生菜 (生)", category: "vege", calPer100: 15, proteinPer100: 1.2, unit: "g" },
+
+      // 3. 蛋白質 1：主肉類 / 海鮮 (熟重)
+      { id: "f2", name: "雞胸肉 (熟重)", category: "protein1", calPer100: 150, proteinPer100: 30, unit: "g" , fav: true },
+      { id: "f3", name: "牛肩里肌肉片 (熟重)", category: "protein1", calPer100: 180, proteinPer100: 27, unit: "g" },
+      { id: "f4", name: "鯛魚排 / 鱸魚排 (熟重)", category: "protein1", calPer100: 115, proteinPer100: 23, unit: "g" },
+      { id: "f5", name: "冷凍無頭白蝦仁 (熟重)", category: "protein1", calPer100: 110, proteinPer100: 24, unit: "g" },
+      { id: "f6", name: "煎鮭魚 (熟重)", category: "protein1", calPer100: 200, proteinPer100: 20, unit: "g", isSalmon: true },
+      { id: "f7", name: "豬里肌肉片 (熟重)", category: "protein1", calPer100: 180, proteinPer100: 27, unit: "g" },
+      { id: "f8", name: "豬梅花肉片 (熟重)", category: "protein1", calPer100: 275, proteinPer100: 22, unit: "g" },
+      { id: "p1", name: "去皮雞腿肉 (熟重)", category: "protein1", calPer100: 195, proteinPer100: 26, unit: "g" },
+      { id: "p2", name: "雞里肌 (熟重)", category: "protein1", calPer100: 145, proteinPer100: 29, unit: "g" },
+      { id: "p3", name: "帶皮雞腿肉 (熟重)", category: "protein1", calPer100: 245, proteinPer100: 24, unit: "g" },
+      { id: "p4", name: "豬腰內肉 (熟重)", category: "protein1", calPer100: 150, proteinPer100: 26, unit: "g" },
+      { id: "p5", name: "牛腱 (熟重)", category: "protein1", calPer100: 185, proteinPer100: 30, unit: "g" },
+      { id: "p6", name: "牛里肌 / 菲力 (熟重)", category: "protein1", calPer100: 195, proteinPer100: 28, unit: "g" },
+      { id: "p7", name: "沙朗牛排 (熟重)", category: "protein1", calPer100: 240, proteinPer100: 27, unit: "g" },
+      { id: "p8", name: "肋眼牛排 (熟重)", category: "protein1", calPer100: 290, proteinPer100: 24, unit: "g" },
+      { id: "p9", name: "牛絞肉 (熟重)", category: "protein1", calPer100: 250, proteinPer100: 26, unit: "g" },
+      { id: "p10", name: "豬絞肉 (熟重)", category: "protein1", calPer100: 260, proteinPer100: 25, unit: "g" },
+      { id: "p11", name: "雞絞肉 (熟重)", category: "protein1", calPer100: 200, proteinPer100: 27, unit: "g" },
+      { id: "p12", name: "鯖魚 (熟重)", category: "protein1", calPer100: 255, proteinPer100: 24, unit: "g" },
+      { id: "p13", name: "鮪魚罐頭 (水煮，瀝乾)", category: "protein1", calPer100: 115, proteinPer100: 25, unit: "g" },
+      { id: "p14", name: "透抽 / 花枝 (熟重)", category: "protein1", calPer100: 100, proteinPer100: 19, unit: "g" },
+      { id: "p15", name: "虱目魚 (熟重)", category: "protein1", calPer100: 190, proteinPer100: 22, unit: "g" },
+      { id: "p16", name: "鱈魚 (熟重)", category: "protein1", calPer100: 105, proteinPer100: 23, unit: "g" },
+      { id: "p17", name: "舒肥雞胸 (超商即食)", category: "protein1", calPer100: 115, proteinPer100: 24, unit: "g" },
+
+      // 4. 蛋白質 2：豆製品 / 乳製品 / 補充品
+      { id: "f9", name: "中華嫩豆腐", category: "protein2", calPer100: 50, proteinPer100: 5, unit: "g" },
+      { id: "f10", name: "板豆腐", category: "protein2", calPer100: 90, proteinPer100: 8.5, unit: "g" },
+      { id: "f11", name: "毛豆仁 (熟重)", category: "protein2", calPer100: 125, proteinPer100: 12, unit: "g" },
+      { id: "f12", name: "無糖豆漿", category: "protein2", calPer100: 33, proteinPer100: 3.2, unit: "ml" },
+      { id: "f13", name: "小方豆乾 / 黑豆乾", category: "protein2", calPer100: 165, proteinPer100: 18, unit: "g" },
+      { id: "q1", name: "無糖優格", category: "protein2", calPer100: 62, proteinPer100: 3.5, unit: "g" },
+      { id: "q2", name: "希臘優格 (無糖)", category: "protein2", calPer100: 75, proteinPer100: 9, unit: "g" },
+      { id: "q3", name: "起司片", category: "protein2", calPer100: 320, proteinPer100: 18, unit: "g", pieceName: "片", pieceG: 18 },
+      { id: "q4", name: "乳清蛋白粉", category: "protein2", calPer100: 400, proteinPer100: 80, unit: "g", pieceName: "勺", pieceG: 30 },
+      { id: "q5", name: "黃豆 / 黑豆 (熟)", category: "protein2", calPer100: 170, proteinPer100: 16, unit: "g" },
+      { id: "q6", name: "豆包", category: "protein2", calPer100: 83, proteinPer100: 23, unit: "g" },
+
+      // 5. 澱粉 (全穀雜糧；熟重，燕麥為乾重)
+      { id: "f14", name: "地瓜 (熟重)", category: "carb", calPer100: 125, proteinPer100: 1.3, unit: "g" },
+      { id: "f15", name: "甜玉米粒罐頭", category: "carb", calPer100: 70, proteinPer100: 2.3, unit: "g" },
+      { id: "f16", name: "馬鈴薯 (熟重)", category: "carb", calPer100: 77, proteinPer100: 2, unit: "g" },
+      { id: "f17", name: "栗子南瓜 (熟重)", category: "carb", calPer100: 85, proteinPer100: 2, unit: "g" },
+      { id: "f18", name: "冷凍即食穀物飯 (熟重)", category: "carb", calPer100: 140, proteinPer100: 3.5, unit: "g" },
+      { id: "f19", name: "大燕麥片 (乾重)", category: "carb", calPer100: 389, proteinPer100: 13, unit: "g" },
+      { id: "f20", name: "白米飯 (熟重)", category: "carb", calPer100: 135, proteinPer100: 2.6, unit: "g" },
+      { id: "k1", name: "糙米飯 (熟重)", category: "carb", calPer100: 130, proteinPer100: 2.8, unit: "g" },
+      { id: "k2", name: "藜麥 (熟重)", category: "carb", calPer100: 120, proteinPer100: 4.4, unit: "g" },
+      { id: "k3", name: "全麥吐司", category: "carb", calPer100: 255, proteinPer100: 10, unit: "g", pieceName: "片", pieceG: 40 },
+      { id: "k4", name: "白吐司", category: "carb", calPer100: 270, proteinPer100: 8, unit: "g", pieceName: "片", pieceG: 40 },
+      { id: "k5", name: "饅頭 (白)", category: "carb", calPer100: 225, proteinPer100: 7, unit: "g", pieceName: "顆", pieceG: 90 },
+      { id: "k6", name: "貝果 (原味)", category: "carb", calPer100: 270, proteinPer100: 10, unit: "g", pieceName: "個", pieceG: 100 },
+      { id: "k7", name: "麵條 (熟重)", category: "carb", calPer100: 135, proteinPer100: 4.6, unit: "g" },
+      { id: "k8", name: "義大利麵 (熟重)", category: "carb", calPer100: 158, proteinPer100: 5.8, unit: "g" },
+      { id: "k9", name: "烏龍麵 (熟重)", category: "carb", calPer100: 130, proteinPer100: 3.2, unit: "g" },
+      { id: "k10", name: "冬粉 (熟重)", category: "carb", calPer100: 90, proteinPer100: 0.2, unit: "g" },
+      { id: "k11", name: "蕎麥麵 (熟重)", category: "carb", calPer100: 100, proteinPer100: 5, unit: "g" },
+      { id: "k12", name: "芋頭 (熟重)", category: "carb", calPer100: 115, proteinPer100: 1.8, unit: "g" },
+      { id: "k13", name: "玉米 (煮熟，可食部)", category: "carb", calPer100: 96, proteinPer100: 3.4, unit: "g" },
+      { id: "k14", name: "紅豆 (熟，無糖)", category: "carb", calPer100: 125, proteinPer100: 7.5, unit: "g" },
+      { id: "k15", name: "鷹嘴豆 (熟)", category: "carb", calPer100: 165, proteinPer100: 9, unit: "g" },
+
+      // 6. 水果 (可食部)
+      { id: "f21", name: "芭樂", category: "fruit", calPer100: 35, proteinPer100: 0.7, unit: "g" },
+      { id: "f22", name: "蘋果", category: "fruit", calPer100: 50, proteinPer100: 0.3, unit: "g", pieceName: "顆", pieceG: 150 },
+      { id: "f23", name: "奇異果", category: "fruit", calPer100: 55, proteinPer100: 1, unit: "g", pieceName: "顆", pieceG: 75 },
+      { id: "f24", name: "香蕉", category: "fruit", calPer100: 88, proteinPer100: 1.1, unit: "g", pieceName: "根", pieceG: 100 },
+      { id: "f25", name: "聖女小番茄", category: "fruit", calPer100: 30, proteinPer100: 0.9, unit: "g", pieceName: "顆", pieceG: 15 },
+      { id: "r1", name: "藍莓", category: "fruit", calPer100: 57, proteinPer100: 0.7, unit: "g" },
+      { id: "r2", name: "草莓", category: "fruit", calPer100: 32, proteinPer100: 0.7, unit: "g" },
+      { id: "r3", name: "橘子 / 柑橘", category: "fruit", calPer100: 45, proteinPer100: 0.8, unit: "g", pieceName: "顆", pieceG: 100 },
+      { id: "r4", name: "柳丁", category: "fruit", calPer100: 47, proteinPer100: 0.9, unit: "g", pieceName: "顆", pieceG: 150 },
+      { id: "r5", name: "葡萄", category: "fruit", calPer100: 65, proteinPer100: 0.6, unit: "g" },
+      { id: "r6", name: "鳳梨", category: "fruit", calPer100: 50, proteinPer100: 0.5, unit: "g" },
+      { id: "r7", name: "木瓜", category: "fruit", calPer100: 40, proteinPer100: 0.5, unit: "g" },
+      { id: "r8", name: "芒果", category: "fruit", calPer100: 60, proteinPer100: 0.8, unit: "g" },
+      { id: "r9", name: "水梨", category: "fruit", calPer100: 45, proteinPer100: 0.5, unit: "g" },
+      { id: "r10", name: "西瓜", category: "fruit", calPer100: 30, proteinPer100: 0.6, unit: "g" },
+      { id: "r11", name: "哈密瓜", category: "fruit", calPer100: 34, proteinPer100: 0.8, unit: "g" },
+      { id: "r12", name: "釋迦", category: "fruit", calPer100: 95, proteinPer100: 2, unit: "g" },
+      { id: "r13", name: "蓮霧", category: "fruit", calPer100: 38, proteinPer100: 0.5, unit: "g" },
+      { id: "r14", name: "火龍果", category: "fruit", calPer100: 52, proteinPer100: 1.1, unit: "g" },
+
+      // 7. 油脂 / 堅果 (熱量密度高，建議秤量)
+      { id: "o1", name: "橄欖油 / 食用油", category: "fat", calPer100: 884, proteinPer100: 0, unit: "g", pieceName: "茶匙", pieceG: 5 },
+      { id: "o2", name: "無調味綜合堅果", category: "fat", calPer100: 610, proteinPer100: 20, unit: "g", pieceName: "包", pieceG: 25 },
+      { id: "o3", name: "杏仁果 (無調味)", category: "fat", calPer100: 580, proteinPer100: 21, unit: "g", pieceName: "粒", pieceG: 1.2 },
+      { id: "o4", name: "核桃", category: "fat", calPer100: 650, proteinPer100: 15, unit: "g" },
+      { id: "o5", name: "花生米 (烤，無調味)", category: "fat", calPer100: 585, proteinPer100: 24, unit: "g" },
+      { id: "o6", name: "花生醬 (無糖)", category: "fat", calPer100: 590, proteinPer100: 25, unit: "g", pieceName: "湯匙", pieceG: 16 },
+      { id: "o7", name: "酪梨", category: "fat", calPer100: 160, proteinPer100: 2, unit: "g", pieceName: "顆", pieceG: 150 },
+      { id: "o8", name: "奶油", category: "fat", calPer100: 717, proteinPer100: 0.9, unit: "g", pieceName: "茶匙", pieceG: 5 },
+      { id: "o9", name: "美乃滋", category: "fat", calPer100: 680, proteinPer100: 1, unit: "g", pieceName: "湯匙", pieceG: 14 },
+
+      // 8. 作弊食物 / 外食零食 (炸物、超商、甜點)
+      { id: "c1", name: "鹹酥雞 (炸雞塊)", category: "cheat", calPer100: 300, proteinPer100: 18, unit: "g" },
+      { id: "c2", name: "炸雞排", category: "cheat", calPer100: 280, proteinPer100: 20, unit: "g", pieceName: "片", pieceG: 250 },
+      { id: "c3", name: "炸甜不辣", category: "cheat", calPer100: 320, proteinPer100: 8, unit: "g" },
+      { id: "c4", name: "醬燒肉串 / 燒烤肉片", category: "cheat", calPer100: 250, proteinPer100: 18, unit: "g" },
+      { id: "c5", name: "高麗菜水餃", category: "cheat", calPer100: 210, proteinPer100: 7, unit: "g", pieceName: "顆", pieceG: 25 },
+      { id: "c6", name: "美式牛肉漢堡", category: "cheat", calPer100: 260, proteinPer100: 13, unit: "g", pieceName: "個", pieceG: 200 },
+      { id: "c7", name: "夏威夷披薩", category: "cheat", calPer100: 250, proteinPer100: 10, unit: "g", pieceName: "片", pieceG: 110 },
+      { id: "c8", name: "泡麵 (乾麵餅重，不含湯)", category: "cheat", calPer100: 450, proteinPer100: 9, unit: "g", pieceName: "包", pieceG: 85 },
+      { id: "c9", name: "炸薯條", category: "cheat", calPer100: 312, proteinPer100: 3.4, unit: "g" },
+      { id: "c10", name: "洋芋片", category: "cheat", calPer100: 540, proteinPer100: 6, unit: "g" },
+      { id: "c11", name: "冰淇淋 (香草)", category: "cheat", calPer100: 207, proteinPer100: 3.5, unit: "g" },
+      { id: "c12", name: "牛奶巧克力", category: "cheat", calPer100: 535, proteinPer100: 7.7, unit: "g" },
+      { id: "c13", name: "御飯糰 (超商，一般口味)", category: "cheat", calPer100: 190, proteinPer100: 5, unit: "g", pieceName: "個", pieceG: 100, unitOnly: true },
+      { id: "c14", name: "超商三明治 (一般)", category: "cheat", calPer100: 280, proteinPer100: 12, unit: "g", pieceName: "個", pieceG: 100, unitOnly: true },
+      { id: "c15", name: "滿漢大餐珍味牛肉麵", category: "cheat", calPer100: 318, proteinPer100: 8.3, unit: "g", pieceName: "包", pieceG: 173 },
+      { id: "c16", name: "義美蔥肉酥餅", category: "cheat", calPer100: 325, proteinPer100: 9.9, unit: "g", pieceName: "片", pieceG: 110 },
+      { id: "c17", name: "香菇肉焿", category: "cheat", calPer100: 92, proteinPer100: 9.2, unit: "g", pieceName: "份", pieceG: 200 },
+      { id: "c18", name: "筍絲焢肉", category: "cheat", calPer100: 356, proteinPer100: 18.1, unit: "g", pieceName: "份", pieceG: 200 },
+      { id: "c19", name: "紅燒牛腩", category: "cheat", calPer100: 118, proteinPer100: 10.7, unit: "g", pieceName: "份", pieceG: 200 },
+      { id: "c20", name: "番茄蘑菇", category: "cheat", calPer100: 140, proteinPer100: 7.1, unit: "g", pieceName: "份", pieceG: 120 },
+      { id: "c21", name: "牛丼", category: "cheat", calPer100: 246, proteinPer100: 14.4, unit: "g", pieceName: "份", pieceG: 180 },
+      { id: "c21", name: "牛丼", category: "cheat", calPer100: 246, proteinPer100: 14.4, unit: "g", pieceName: "份", pieceG: 180 },
+
+
+      // 9. 飲料 / 湯品 (每 100ml；即溶飲品以「杯」計)
+      { id: "d1", name: "半糖珍奶", category: "drink", calPer100: 100, proteinPer100: 0.8, unit: "ml" },
+      { id: "d2", name: "可口可樂 / 汽水", category: "drink", calPer100: 42, proteinPer100: 0, unit: "ml" },
+      { id: "d3", name: "100% 柳橙汁", category: "drink", calPer100: 45, proteinPer100: 0.7, unit: "ml" },
+      { id: "d4", name: "無糖綠茶 / 烏龍茶", category: "drink", calPer100: 0, proteinPer100: 0, unit: "ml" },
+      { id: "d5", name: "雀巢2合1義式拿鐵 (即溶)", category: "drink", calPer100: 51, proteinPer100: 1.5, unit: "ml", pieceName: "杯", pieceG: 100, unitOnly: true},
+      { id: "d6", name: "雀巢2合1香滑原味 (即溶)", category: "drink", calPer100: 47, proteinPer100: 0.5, unit: "ml", pieceName: "杯", pieceG: 100, unitOnly: true},
+      { id: "d7", name: "黑咖啡 (無糖)", category: "drink", calPer100: 1, proteinPer100: 0.1, unit: "ml" },
+      { id: "d8", name: "全脂鮮乳", category: "drink", calPer100: 63, proteinPer100: 3.2, unit: "ml" },
+      { id: "d9", name: "低脂鮮乳", category: "drink", calPer100: 47, proteinPer100: 3.3, unit: "ml" },
+      { id: "d10", name: "豆漿 (加糖)", category: "drink", calPer100: 55, proteinPer100: 3.2, unit: "ml" },
+      { id: "d11", name: "運動飲料", category: "drink", calPer100: 25, proteinPer100: 0, unit: "ml" },
+      { id: "d12", name: "半糖綠茶 / 紅茶", category: "drink", calPer100: 25, proteinPer100: 0, unit: "ml" },
+      { id: "d13", name: "啤酒", category: "drink", calPer100: 43, proteinPer100: 0.4, unit: "ml" },
+      { id: "d14", name: "味噌湯", category: "drink", calPer100: 20, proteinPer100: 1.5, unit: "ml" }
+
+    ];
+
+    // v3 以前就存在的預設食材 id (升級時只會新增「不在這份清單」的新食材，不會把你刪掉的舊食材加回來)
+    const V3_FOOD_IDS = new Set(["f1", "v1", "v2", "v3", "v4", "v5", "v6", "v7", "f2", "f3", "f4", "f5", "f6", "f7", "f8", "f9", "f10", "f11", "f12", "f13", "f14", "f15", "f16", "f17", "f18", "f19", "f20", "f21", "f22", "f23", "f24", "f25", "c1", "c2", "c3", "c4", "c5", "c6", "c7", "c8", "d1", "d2", "d3", "d4"]);
+
+    // 既有預設食材的計數單位升級 (只在尚未設定計數單位時套用；名稱僅在仍是舊預設名稱時才更新)
+    const FOOD_UNIT_UPGRADES = {
+      f22: { pieceName: "顆", pieceG: 150 },
+      f23: { pieceName: "顆", pieceG: 75 },
+      f24: { pieceName: "根", pieceG: 100 },
+      f25: { pieceName: "顆", pieceG: 15 },
+      c2: { pieceName: "片", pieceG: 250 },
+      c5: { pieceName: "顆", pieceG: 25, renameFrom: "高麗菜水餃 (50g/2顆)", renameTo: "高麗菜水餃" },
+      c6: { pieceName: "個", pieceG: 200 },
+      c7: { pieceName: "片", pieceG: 110 },
+      c8: { pieceName: "包", pieceG: 85, renameFrom: "泡麵 (碗裝煮熟)", renameTo: "泡麵 (乾麵餅重，不含湯)" },
+    };
+
+    // --- 預設範本：只保留一組超商範本，其餘由使用者自行新增 ---
+    const DEFAULT_TEMPLATES = [
+      { id: "t11", name: "範本 【超商免開火】", items: { fixed: [{id:"f1", weight:55}], protein1: [{id:"f2", weight:100}], protein2: [{id:"f13", weight:80}], carb: [{id:"f14", weight:110}], vege: [{id:"v20", weight:200}] }}
+    ];
+
+    // --- State 全局狀態 ---
+    let state = {
+      profile: { height: 168, calTarget: 1500, proteinTarget: 100, sex: "", age: "", activity: 1.375, heightConfirmed: false, calConfirmed: false, proteinConfirmed: false },
+      foods: [],
+      templates: [],
+      dailyLogs: {},
+      weight: WT.normalize(null),
+      setup: { done: false, intent: "", cardHidden: false, installSnooze: "", installDone: false },
+      currentDate: todayStr(),
+      weekEnd: todayStr()
+    };
+
+    const DATA_VERSION = 6;
+    const LS_DATA = "fat_loss_pwa_data";
+    const LS_PREV_ALL = "fat_loss_pwa_prev_all";     // 匯入完整備份前的整份快照
+    const LS_LAST_BACKUP = "fat_loss_pwa_last_backup";
+    const LS_BACKUP_SNOOZE = "fat_loss_pwa_backup_snooze";
+
+    const byId = (id) => document.getElementById(id);
+    function esc(str) {
+      return String(str).replace(/[&<>"']/g, c => ({ "&":"&amp;", "<":"&lt;", ">":"&gt;", '"':"&quot;", "'":"&#39;" }[c]));
+    }
+    let toastTimer = null;
+    function showToast(msg, color, ms, action) {
+      const t = byId("toast");
+      t.textContent = "";
+      const sp = document.createElement("span");
+      sp.textContent = msg;
+      t.appendChild(sp);
+      if (action) {
+        const b = document.createElement("button");
+        b.textContent = action.label;
+        b.className = "ml-3 underline font-bold";
+        b.onclick = () => { t.classList.add("hidden"); action.fn(); };
+        t.appendChild(b);
+      }
+      t.style.background = color || "";
+      t.classList.remove("hidden");
+      clearTimeout(toastTimer);
+      toastTimer = setTimeout(() => t.classList.add("hidden"), ms || (msg.length > 40 ? 5000 : 2800));
+    }
+
+    // ---- 整餐覆蓋類操作 (套用範本 / 清除 / 複製昨日) 的復原 ----
+    function snapMeal(mealKey) {
+      const m = ((state.dailyLogs[state.currentDate] || {}).meals || {})[mealKey];
+      return { date: state.currentDate, mealKey, data: m ? clone(m) : null };
+    }
+    function offerUndo(msg, snap) { showToast(msg, null, 9000, { label: "復原", fn: () => restoreMeal(snap) }); }
+    function restoreMeal(snap) {
+      if (!state.dailyLogs[snap.date]) state.dailyLogs[snap.date] = { meals: {} };
+      const log = state.dailyLogs[snap.date];
+      if (!log.meals) log.meals = {};
+      if (snap.data) log.meals[snap.mealKey] = snap.data; else delete log.meals[snap.mealKey];
+      saveState();
+      if (state.currentDate === snap.date) renderTracker();
+      showToast("已復原");
+    }
+    function daysBetween(a, b) { return Math.round((parseDate(b) - parseDate(a)) / 86400000); }
+
+    // 取得某分類的所有項目 (相容舊版單一物件)
+    function slotItems(mealData, catKey) {
+      const v = mealData ? mealData[catKey] : null;
+      if (Array.isArray(v)) return v.filter(it => it && typeof it === "object");
+      if (v && typeof v === "object" && "id" in v) return [v];
+      return [];
+    }
+
+    // 舊格式 / 匯入資料 → 每個分類一個陣列 (並丟掉空項目)
+    function normalizeMeal(meal) {
+      if (!meal || typeof meal !== "object") return meal;
+      Object.keys(meal).forEach(k => {
+        if (k === "extra") return;
+        const v = meal[k];
+        if (Array.isArray(v)) meal[k] = v.filter(it => it && it.id);
+        else if (v && typeof v === "object") meal[k] = v.id ? [v] : [];
+        else delete meal[k];
+      });
+      return meal;
+    }
+
+    function formatAmount(food, weight) {
+      const w = parseFloat(weight) || 0;
+      if (food.pieceG > 0) return `${Math.round(w / food.pieceG * 100) / 100}${food.pieceName || "份"}`;
+      return `${Math.round(w)}${isLiquid(food) ? "ml" : "g"}`;
+    }
+
+    // 一餐 / 一天的熱量與蛋白質 (含手動輸入的 extra)
+    function mealTotals(mealData) {
+      let cal = 0, protein = 0, hasFruit = false, hasSalmon = false;
+      CAT_KEYS.forEach(c => {
+        slotItems(mealData, c.key).forEach(item => {
+          if (item && item.id && item.weight) {
+            const food = state.foods.find(f => f.id === item.id);
+            if (food) {
+              cal += (food.calPer100 * item.weight) / 100;
+              protein += (food.proteinPer100 * item.weight) / 100;
+              if (food.category === "fruit") hasFruit = true;
+              if (food.isSalmon) hasSalmon = true;
+            }
+          }
+        });
+      });
+      if (Array.isArray(mealData.extra)) {
+        mealData.extra.forEach(x => { cal += parseFloat(x.cal) || 0; protein += parseFloat(x.protein) || 0; });
+      }
+      return { cal, protein, hasFruit, hasSalmon };
+    }
+
+    function dayTotals(ds) {
+      const log = state.dailyLogs[ds];
+      let cal = 0, protein = 0;
+      if (log && log.meals) {
+        Object.values(log.meals).forEach(m => { const t = mealTotals(m || {}); cal += t.cal; protein += t.protein; });
+      }
+      return { cal, protein };
+    }
+
+    // 最近一次體重紀錄
+    function getLatestWeight() { return WT.latest(); }
+
+    // BMI (台灣國健署成人標準)
+    function bmiInfo(w, hcm) {
+      const bmi = w / Math.pow(hcm / 100, 2);
+      let label, tone;
+      if (bmi < 18.5) { label = "過輕"; tone = "text-sky-600"; }
+      else if (bmi < 24) { label = "正常範圍"; tone = "text-emerald-600"; }
+      else if (bmi < 27) { label = "過重"; tone = "text-amber-600"; }
+      else if (bmi < 30) { label = "輕度肥胖"; tone = "text-orange-600"; }
+      else if (bmi < 35) { label = "中度肥胖"; tone = "text-red-600"; }
+      else { label = "重度肥胖"; tone = "text-red-700"; }
+      return { bmi, label, tone };
+    }
+
+    // BMR (Mifflin-St Jeor) 與 TDEE
+    function calcBMRTDEE(pf, w) {
+      if (!w || !pf.sex || !(pf.age >= 10) || !(pf.height >= 100)) return null;
+      const bmr = 10 * w + 6.25 * pf.height - 5 * pf.age + (pf.sex === "male" ? 5 : -161);
+      return { bmr, tdee: bmr * (pf.activity || 1.375) };
+    }
+    // 常用 (★) 排前面，其餘維持原順序
+    function sortFoods(list) {
+      return list.map((f, i) => [f, i]).sort((x, y) => (!!y[0].fav - !!x[0].fav) || (x[1] - y[1])).map(x => x[0]);
+    }
+    const clone = (o) => JSON.parse(JSON.stringify(o));
+
+    // --- 日期工具 (使用本地時區，避免 UTC 在凌晨造成差一天) ---
+    function fmtDate(d) {
+      return `${d.getFullYear()}-${String(d.getMonth()+1).padStart(2,"0")}-${String(d.getDate()).padStart(2,"0")}`;
+    }
+    function todayStr() { return fmtDate(new Date()); }
+    function parseDate(str) { const [y,m,d] = str.split("-").map(Number); return new Date(y, m-1, d); }
+    function addDays(str, n) { const d = parseDate(str); d.setDate(d.getDate() + n); return fmtDate(d); }
+
+    // --- 飲料 / 液體 判斷與預設份量 ---
+    function isLiquid(food) { return !!food && (food.unit === "ml" || food.category === "drink"); }
+    function defaultAmount(food) {
+      if(!food) return 100;
+      if(food.pieceG > 0) return food.pieceG;
+      if(food.category === "fixed") return 60;
+      return 100;
+    }
+
+    const MEAL_TYPES = [
+      { key: "breakfast", label: "🍳 早餐" },
+      { key: "lunch", label: "🥩 午餐" },
+      { key: "dinner", label: "🍲 晚餐" },
+      { key: "snack", label: "🌙 消夜" }
+    ];
+
+    const CAT_KEYS = [
+      { key: "fixed", label: "1. 固定蛋白質" },
+      { key: "vege", label: "2. 纖維 (蔬菜)" },
+      { key: "protein1", label: "3. 蛋白質 1 (主肉類)" },
+      { key: "protein2", label: "4. 蛋白質 2 (豆/乳製品)" },
+      { key: "carb", label: "5. 澱粉 (全穀雜糧)" },
+      { key: "fruit", label: "6. 水果" },
+      { key: "fat", label: "7. 油脂 / 堅果" },
+      { key: "cheat", label: "8. 作弊食物 / 消夜炸物" },
+      { key: "drink", label: "9. 飲料 / 湯品" }
+    ];
+
+    // --- 初始化 ---
+    function init() {
+      loadState();
+      document.getElementById("tracker-date").value = state.currentDate;
+      applyTheme();
+      renderThemeButtons();
+      bindEvents();
+      WT.init();
+      renderTracker();
+      lucide.createIcons();
+      registerSW();
+      if (!state.setup.done) OB.start();
+      // 請瀏覽器把資料標記為「持久儲存」，降低空間不足時被清除的機率
+      updateStorageNote(true);
+    }
+
+    async function updateStorageNote(ask) {
+      const el = byId("storage-note");
+      if (!el) return;
+      if (!(navigator.storage && navigator.storage.persisted)) { el.textContent = "此瀏覽器不支援持久儲存設定"; return; }
+      try {
+        let ok = await navigator.storage.persisted();
+        if (!ok && ask && navigator.storage.persist) ok = await navigator.storage.persist();
+        el.textContent = ok ? "持久儲存：已啟用（瀏覽器空間不足時不會自動清除；手動清除網站資料仍會刪除）" : "持久儲存：未啟用（空間不足時瀏覽器可能清除資料，請定期備份）";
+      } catch (e) {}
+    }
+
+    // ---- 外觀：自動 / 淺色 / 深色 ----
+    const LS_THEME = "fat_loss_pwa_theme";
+    const themePref = () => localStorage.getItem(LS_THEME) || "auto";
+    const isDark = () => document.documentElement.classList.contains("dark");
+    function applyTheme() {
+      const pref = themePref();
+      const dark = pref === "dark" || (pref === "auto" && window.matchMedia("(prefers-color-scheme: dark)").matches);
+      document.documentElement.classList.toggle("dark", dark);
+      applyChartTheme();
+    }
+    function applyChartTheme() {
+      if (typeof Chart === "undefined") return;
+      Chart.defaults.color = isDark() ? "#94a3b8" : "#666";
+      Chart.defaults.borderColor = isDark() ? "rgba(148,163,184,0.2)" : "rgba(0,0,0,0.1)";
+    }
+    function renderThemeButtons() {
+      const box = byId("theme-seg");
+      if (!box) return;
+      const cur = themePref();
+      box.innerHTML = [["auto", "🌓 自動"], ["light", "☀️ 淺色"], ["dark", "🌙 深色"]].map(([k, l]) =>
+        `<button type="button" onclick="setTheme('${k}')" class="py-2.5 rounded-xl font-medium ${cur === k ? "bg-emerald-600 text-white" : "bg-slate-100 text-slate-700 hover:bg-slate-200"}">${l}</button>`).join("");
+    }
+    function setTheme(pref) {
+      try { localStorage.setItem(LS_THEME, pref); } catch (e) {}
+      applyTheme();
+      renderThemeButtons();
+      WT.render();
+      if (!byId("tab-trends").classList.contains("hidden")) renderTrends();
+    }
+    if (window.matchMedia) {
+      const mq = window.matchMedia("(prefers-color-scheme: dark)");
+      const onChange = () => { if (themePref() === "auto") { applyTheme(); WT.render(); if (!byId("tab-trends").classList.contains("hidden")) renderTrends(); } };
+      if (mq.addEventListener) mq.addEventListener("change", onChange); else if (mq.addListener) mq.addListener(onChange);
+    }
+
+    function switchTab(target) {
+      document.querySelectorAll(".nav-btn").forEach(b => {
+        const on = b.getAttribute("data-target") === target;
+        b.classList.toggle("active", on);
+        b.classList.toggle("text-emerald-600", on);
+        b.classList.toggle("text-slate-400", !on);
+      });
+      document.querySelectorAll(".tab-content").forEach(c => c.classList.add("hidden"));
+      byId(target).classList.remove("hidden");
+      window.scrollTo(0, 0);
+      if (target === "tab-weight") WT.render();
+      if (target === "tab-trends") renderTrends();
+      if (target === "tab-library") renderLibrary();
+      if (target === "tab-profile") renderProfile();
+    }
+
+    function registerSW() {
+      if (!("serviceWorker" in navigator) || location.protocol === "file:") return;
+      const hadController = !!navigator.serviceWorker.controller;
+      navigator.serviceWorker.register("sw.js").catch(() => {});
+      navigator.serviceWorker.addEventListener("controllerchange", () => {
+        if (hadController) showToast("已有新版本，重新開啟 App 後套用");
+      });
+    }
+
+    function loadState() {
+      const stored = localStorage.getItem(LS_DATA);
+      let ver = DATA_VERSION;
+      if (stored) {
+        try {
+          const parsed = JSON.parse(stored);
+          ver = parsed.dataVersion || 1;
+          state.profile = Object.assign({}, state.profile, parsed.profile || {});
+          state.foods = parsed.foods && parsed.foods.length ? parsed.foods : clone(DEFAULT_FOODS);
+          state.templates = Array.isArray(parsed.templates) ? parsed.templates : clone(DEFAULT_TEMPLATES);
+          state.dailyLogs = parsed.dailyLogs || {};
+          state.weight = WT.normalize(parsed.weight);
+          state.setup = Object.assign({}, state.setup, parsed.setup || {});
+        } catch(e) {
+          // 讀取失敗：先把原始內容另存起來，避免被空白資料覆蓋後就救不回來
+          try { localStorage.setItem(LS_DATA + "_corrupt", stored); } catch (_) {}
+          state.foods = clone(DEFAULT_FOODS);
+          state.templates = clone(DEFAULT_TEMPLATES);
+          setTimeout(() => showToast("資料讀取失敗，已用空白資料開始（原始內容另存在 " + LS_DATA + "_corrupt）", "#dc2626", 8000), 300);
+        }
+      } else {
+        state.foods = clone(DEFAULT_FOODS);
+        applyAliasSeed();
+        state.templates = clone(DEFAULT_TEMPLATES);
+      }
+      migrateData(ver);
+      saveState();
+    }
+
+    // 舊版資料升級：飲料(含豆漿)改 ml / 300ml、珍奶改半糖
+    function migrateToV2() {
+      state.foods.forEach(f => {
+        if (f.id === "d1" && f.name === "全糖珍奶") Object.assign(f, clone(DEFAULT_FOODS.find(x => x.id === "d1")));
+        if (f.id === "f12" || f.category === "drink") f.unit = "ml";
+      });
+      state.templates.forEach(t => {
+        const p2 = t.items && t.items.protein2;
+        if (p2 && p2.id === "f12" && p2.weight === 350) p2.weight = 300;
+      });
+    }
+
+    function migrateData(ver) {
+      if (ver < 2) migrateToV2();
+      if (ver < 3) migrateToV3();
+      if (ver < 4) migrateToV4();
+      if (ver < 5) migrateToV5();
+      if (ver < 6) migrateToV6();
+    }
+
+    // v6：預設值不拿來判定 (身高 / 目標熱量 / 蛋白質需「確認過」才算數)；舊使用者視為已確認
+    const ALIAS_SEED = {
+      f1: ["蛋", "水煮蛋", "白煮蛋"], f14: ["番薯", "蕃薯", "烤地瓜"], f20: ["白飯", "米飯", "飯"], f19: ["燕麥", "oat"],
+      f12: ["豆漿"], d5: ["即溶咖啡", "三合一", "雀巢", "2合1", "拿鐵"], d6: ["即溶咖啡", "三合一", "雀巢", "2合1", "原味"],
+      d7: ["咖啡", "美式"], d8: ["牛奶", "鮮奶"], d9: ["牛奶", "鮮奶", "低脂奶"], k3: ["吐司", "土司", "麵包"], k4: ["吐司", "土司", "麵包"],
+      p13: ["鮪魚罐頭", "tuna"], q4: ["乳清", "whey", "高蛋白"], o1: ["油", "橄欖油"], o7: ["牛油果", "avocado"], f25: ["小番茄", "聖女番茄"],
+      f2: ["雞胸"], p17: ["雞胸", "舒肥雞胸"], f6: ["鮭魚", "三文魚"], f11: ["毛豆"], d1: ["珍奶", "奶茶", "手搖"]
+    };
+    function applyAliasSeed() {
+      state.foods.forEach(f => { if (ALIAS_SEED[f.id] && !(f.aliases && f.aliases.length)) f.aliases = ALIAS_SEED[f.id].slice(); });
+    }
+    function migrateToV6() {
+      const pf = state.profile;
+      const hasData = Object.keys(state.dailyLogs).length > 0 || state.weight.rec.length > 0 || !!state.weight.cfg;
+      // 只會在「v6 以前的資料」才跑到這裡 (那時還沒有確認旗標)，所以直接依使用情況設定
+      pf.heightConfirmed = hasData || pf.height !== 168;
+      pf.calConfirmed = hasData || pf.calTarget !== 1500;
+      pf.proteinConfirmed = hasData || pf.proteinTarget !== 100;
+      state.setup.done = true;                 // 既有使用者不跑首次引導
+      applyAliasSeed();
+    }
+
+    // v5：體重改由「體重」分頁的紀錄管理；舊版飲食記錄的「每日體重」轉成體重紀錄
+    function migrateToV5() {
+      Object.keys(state.dailyLogs).forEach(ds => {
+        const log = state.dailyLogs[ds];
+        if (!log) { delete state.dailyLogs[ds]; return; }
+        const w = parseFloat(log.weight);
+        if (w > 20 && w < 400 && !state.weight.rec.some(r => r.d === ds)) {
+          const rec = WT.makeRec(ds, "07:00", w, "一般", WT.MIGRATED_NOTE);
+          if (rec) state.weight.rec.push(rec);
+        }
+        delete log.weight;
+        if (!log.meals || !Object.keys(log.meals).length) delete state.dailyLogs[ds];
+      });
+    }
+
+    // v4：每格可放多項食物 (舊的單一物件轉成陣列)、範本只留超商組、擴充食材庫與計數單位
+    function migrateToV4() {
+      Object.values(state.dailyLogs).forEach(log => {
+        if (log && log.meals) Object.keys(log.meals).forEach(mk => normalizeMeal(log.meals[mk]));
+      });
+      state.templates.forEach(t => { if (t.items) normalizeMeal(t.items); });
+
+      const removeTpl = new Set(["t1","t2","t3","t4","t5","t6","t7","t8","t9","t10","t12","t13","t14"]);
+      state.templates = state.templates.filter(t => !removeTpl.has(t.id));
+
+      const have = new Set(state.foods.map(f => f.id));
+      DEFAULT_FOODS.forEach(f => { if (!V3_FOOD_IDS.has(f.id) && !have.has(f.id)) state.foods.push(clone(f)); });
+
+      Object.keys(FOOD_UNIT_UPGRADES).forEach(id => {
+        const food = state.foods.find(f => f.id === id);
+        const up = FOOD_UNIT_UPGRADES[id];
+        if (!food) return;
+        if (!food.pieceG) { food.pieceName = up.pieceName; food.pieceG = up.pieceG; }
+        if (up.renameFrom && food.name === up.renameFrom) food.name = up.renameTo;
+      });
+    }
+
+    // v3：雞蛋改以「顆」計數 (1 顆 = 60g)
+    function migrateToV3() {
+      state.foods.forEach(f => {
+        if (f.id === "f1" && !f.pieceG) {
+          f.pieceName = "顆";
+          f.pieceG = 60;
+          if (f.name === "雞蛋 (顆/60g)") f.name = "雞蛋";
+        }
+      });
+    }
+
+    function saveState() {
+      try {
+        localStorage.setItem(LS_DATA, JSON.stringify({
+          dataVersion: DATA_VERSION,
+          profile: state.profile,
+          foods: state.foods,
+          templates: state.templates,
+          dailyLogs: state.dailyLogs,
+          weight: state.weight,
+          setup: state.setup
+        }));
+        return true;
+      } catch (e) {
+        showToast("⚠️ 資料未能儲存（瀏覽器儲存空間不足或被停用），請立即匯出完整備份", "#dc2626", 8000);
+        return false;
+      }
+    }
+
+    // --- 事件綁定 ---
+    function bindEvents() {
+      document.querySelectorAll(".nav-btn").forEach(btn => {
+        btn.addEventListener("click", () => switchTab(btn.getAttribute("data-target")));
+      });
+
+            document.getElementById("tracker-date").addEventListener("change", (e) => {
+        if(!e.target.value) { e.target.value = state.currentDate; return; }
+        setCurrentDate(e.target.value);
+      });
+      document.getElementById("btn-today").addEventListener("click", () => {
+        setCurrentDate(todayStr());
+      });
+      document.getElementById("btn-week-prev").addEventListener("click", () => {
+        state.weekEnd = addDays(state.weekEnd, -7);
+        renderWeekStrip();
+      });
+      document.getElementById("btn-week-next").addEventListener("click", () => {
+        const next = addDays(state.weekEnd, 7);
+        const today = todayStr();
+        state.weekEnd = next > today ? today : next;
+        renderWeekStrip();
+      });
+
+      document.getElementById("btn-open-add-food").addEventListener("click", () => openFoodModal());
+      document.getElementById("btn-close-food-modal").addEventListener("click", () => closeModal("modal-food"));
+      document.getElementById("btn-save-food").addEventListener("click", saveFoodFromModal);
+
+      document.getElementById("btn-close-tpl-modal").addEventListener("click", () => closeModal("modal-tpl"));
+
+      document.getElementById("btn-reset-default").addEventListener("click", () => {
+        if(confirm("確定要將食材庫與範本恢復為預設值嗎？自訂的食材與範本將被重置。")) {
+          state.foods = clone(DEFAULT_FOODS);
+          applyAliasSeed();
+          state.templates = clone(DEFAULT_TEMPLATES);
+          saveState();
+          renderLibrary();
+          alert("已成功恢復預設值！");
+        }
+      });
+
+      document.getElementById("btn-export-foods").addEventListener("click", exportFoodsCSV);
+      byId("btn-sample-csv").addEventListener("click", downloadSampleCSV);
+      document.getElementById("file-import-foods").addEventListener("change", importFoodsCSV);
+      document.getElementById("btn-export-templates").addEventListener("click", exportTemplatesCSV);
+      document.getElementById("file-import-templates").addEventListener("change", importTemplatesCSV);
+
+      byId("btn-export-backup").addEventListener("click", exportFullBackup);
+      byId("file-import-backup").addEventListener("change", importFullBackup);
+      byId("btn-reminder-go").addEventListener("click", () => exportFullBackup());
+      byId("btn-restore-all").addEventListener("click", restoreAll);
+      byId("btn-reminder-snooze").addEventListener("click", () => {
+        localStorage.setItem(LS_BACKUP_SNOOZE, addDays(todayStr(), 7));
+        renderBackupReminder();
+      });
+
+      document.getElementById("btn-save-profile").addEventListener("click", saveProfile);
+    }
+
+    // --- 切換日期 / 7 天日期列 ---
+    function setCurrentDate(ds) {
+      state.currentDate = ds;
+      document.getElementById("tracker-date").value = ds;
+      // 若選到的日期不在目前顯示的 7 天內，重新對齊視窗
+      const start = addDays(state.weekEnd, -6);
+      if (ds < start || ds > state.weekEnd) {
+        const today = todayStr();
+        const cap = today > ds ? today : ds;
+        const e = addDays(ds, 3);
+        state.weekEnd = e > cap ? cap : e;
+      }
+      renderTracker();
+    }
+
+    // 當日體重 (來自「體重」分頁的紀錄)
+    function renderDayWeight() {
+      const el = byId("day-weight");
+      if (!el) return;
+      const info = WT.dayInfo(state.currentDate);
+      if (!info) { el.innerHTML = '<span class="text-slate-400">⚖️ 這天還沒有體重紀錄</span>'; return; }
+      const tag = info.n > 1 ? `${info.n} 筆平均` : (info.last.g || "已記錄");
+      const sta = info.status;
+      const verdict = !sta ? "" : (sta.maintain
+        ? (sta.st === "on" ? ' <span class="text-emerald-600 font-medium">趨勢在區間內</span>' : ' <span class="text-amber-700 font-medium">趨勢離開區間</span>')
+        : (sta.st === "ahead" ? ` <span class="text-emerald-600 font-medium">趨勢領先 ${Math.abs(sta.gap).toFixed(1)}</span>`
+          : (sta.st === "on" ? ' <span class="text-lime-600 font-medium">趨勢貼近目標</span>'
+            : ` <span class="${sta.st === "far" ? "text-red-600" : "text-amber-600"} font-medium">趨勢落後 ${sta.gap.toFixed(1)}</span>`)));
+      el.innerHTML = `⚖️ <b class="text-slate-800">${info.mean} kg</b> <span class="text-slate-400">（${esc(tag)}）</span>${verdict}`;
+    }
+
+    // 近 N 天平均攝取 (給體重分頁診斷用)；目標未確認或紀錄太少時回傳 null
+    function dietSignal(nDays) {
+      if (!state.profile.calConfirmed) return null;
+      let sum = 0, n = 0;
+      for (let i = 0; i < nDays; i++) {
+        const ds = addDays(todayStr(), -i);
+        if (dayHasRecord(ds)) { sum += dayTotals(ds).cal; n++; }
+      }
+      return n >= 5 ? { avg: Math.round(sum / n), target: state.profile.calTarget, days: n } : null;
+    }
+
+    function dayHasRecord(ds) {
+      const log = state.dailyLogs[ds];
+      if (!log || !log.meals) return false;
+      return Object.keys(log.meals).some(k => mealHasItems(ds, k));
+    }
+
+    function renderWeekStrip() {
+      const strip = document.getElementById("week-strip");
+      strip.innerHTML = "";
+      const today = todayStr();
+      const WK = ["日","一","二","三","四","五","六"];
+
+      for (let i = 6; i >= 0; i--) {
+        const ds = addDays(state.weekEnd, -i);
+        const d = parseDate(ds);
+        const has = dayHasRecord(ds);
+        const sel = ds === state.currentDate;
+
+        const over = has && state.profile.calConfirmed && dayTotals(ds).cal > state.profile.calTarget;
+        let color;
+        if (sel) color = over ? "bg-red-600 text-white border-red-600 shadow" : (has ? "bg-emerald-600 text-white border-emerald-600 shadow" : "bg-slate-500 text-white border-slate-500 shadow");
+        else color = over ? "bg-red-100 text-red-800 border-red-300 hover:bg-red-200" : (has ? "bg-emerald-100 text-emerald-800 border-emerald-300 hover:bg-emerald-200" : "bg-slate-50 text-slate-400 border-slate-200 hover:bg-slate-100");
+
+        const btn = document.createElement("button");
+        btn.className = `flex flex-col items-center justify-center h-12 rounded-xl border transition ${color}`;
+        btn.setAttribute("aria-label", `${d.getMonth()+1}月${d.getDate()}日，${has ? "有" : "沒有"}飲食紀錄${over ? "，熱量超標" : ""}`);
+        btn.innerHTML = `
+          <span class="text-[10px] leading-none opacity-80">${WK[d.getDay()]}</span>
+          <span class="text-sm font-bold leading-none mt-1">${d.getDate()}</span>
+          <span class="w-1 h-1 rounded-full mt-1 ${ds === today ? "bg-current" : "bg-transparent"}"></span>`;
+        btn.onclick = () => setCurrentDate(ds);
+        strip.appendChild(btn);
+      }
+
+      const startD = parseDate(addDays(state.weekEnd, -6));
+      const endD = parseDate(state.weekEnd);
+      document.getElementById("week-range").innerText =
+        `${startD.getMonth()+1}/${startD.getDate()} – ${endD.getMonth()+1}/${endD.getDate()}`;
+      document.getElementById("btn-week-next").disabled = state.weekEnd >= today;
+    }
+
+    function closeModal(id) {
+      document.getElementById(id).classList.add("hidden");
+    }
+
+    // --- 渲染 TAB 1: 飲食紀錄器 ---
+    function renderTracker() {
+      const container = document.getElementById("meals-container");
+      container.innerHTML = "";
+
+      const dayLog = state.dailyLogs[state.currentDate] || { meals: {} };
+      let totalCal = 0;
+      let totalProtein = 0;
+
+      MEAL_TYPES.forEach(m => {
+        const mealData = (dayLog.meals && dayLog.meals[m.key]) || {};
+
+        const mt = mealTotals(mealData);
+        const mealCal = mt.cal;
+        const mealProtein = mt.protein;
+        const mealHasFruit = mt.hasFruit;
+        const mealHasSalmon = mt.hasSalmon;
+        const extras = Array.isArray(mealData.extra) ? mealData.extra : [];
+
+        totalCal += mealCal;
+        totalProtein += mealProtein;
+
+        const card = document.createElement("div");
+        const ms = MEAL_STYLE[m.key] || MEAL_STYLE.breakfast;
+        card.className = `bg-white rounded-2xl shadow-sm border border-slate-100 border-l-4 ${ms.bar} overflow-hidden`;
+
+        card.innerHTML = `
+          <div class="flex flex-wrap justify-between items-center gap-y-2 px-4 py-3 border-b ${ms.head}">
+            <div>
+              <h3 class="font-bold text-sm ${ms.title}">${m.label}</h3>
+              <span class="text-xs ${ms.sub}">當餐：${Math.round(mealCal)} kcal / ${mealProtein.toFixed(1)}g 蛋白質</span>
+            </div>
+            <div class="flex items-center gap-1.5 ml-auto">
+              <button onclick="copyMealFromPrev('${m.key}')" class="text-xs bg-white border border-slate-200 text-slate-700 hover:bg-slate-100 px-2.5 py-1 rounded-lg transition font-medium">複製昨日</button>
+              <button onclick="openTplModal('${m.key}')" class="text-xs bg-white border border-emerald-200 text-emerald-700 hover:bg-emerald-50 px-2.5 py-1 rounded-lg transition font-medium">範本</button>
+              <button onclick="clearMeal('${m.key}')" class="text-xs bg-white border border-red-200 text-red-600 hover:bg-red-50 px-2.5 py-1 rounded-lg transition font-medium">清除</button>
+            </div>
+          </div>
+          <div class="p-4 space-y-3">
+          <div class="space-y-2.5 text-xs">
+            ${CAT_KEYS.map(cat => {
+              const items = slotItems(mealData, cat.key);
+              const rows = items.length ? items : [{ id: "", weight: "" }];
+
+              const rowHtml = rows.map((currentVal, idx) => {
+                const selFood = state.foods.find(f => f.id === currentVal.id);
+                const w = parseFloat(currentVal.weight) || 0;
+                const pieceG = selFood && selFood.pieceG > 0 ? selFood.pieceG : 0;
+                const unitSuffix = selFood ? (pieceG ? (selFood.pieceName || "份") : (isLiquid(selFood) ? "ml" : "g")) : "";
+                const shownVal = (pieceG && w > 0) ? Math.round(w / pieceG * 100) / 100 : (currentVal.weight || "");
+
+                let infoHtml = '<div class="text-slate-300 text-center">—</div>';
+                if (selFood && w > 0) {
+                  const c = Math.round(selFood.calPer100 * w / 100);
+                  const p = (selFood.proteinPer100 * w / 100).toFixed(1);
+                  infoHtml = `
+                    <div class="font-bold text-emerald-700">${c} kcal</div>
+                    <div class="text-[11px] text-blue-600">蛋白質 ${p}g</div>`;
+                }
+
+                return `
+                  <div class="flex items-center gap-2">
+                    <button type="button" onclick="openPicker('${m.key}', '${cat.key}', ${idx})" class="flex-1 min-w-0 flex items-center justify-between gap-1 bg-slate-50 border border-slate-200 rounded-lg p-1.5 text-left focus:outline-none focus:ring-1 focus:ring-emerald-500">
+                      <span class="truncate ${selFood ? 'text-slate-700' : 'text-slate-400'}">${selFood ? (selFood.fav ? '★ ' : '') + esc(selFood.name) : '-- 請選擇 --'}</span>
+                      <i data-lucide="chevron-down" class="w-3.5 h-3.5 text-slate-400 shrink-0"></i>
+                    </button>
+                    <div class="relative w-[68px] shrink-0">
+                      <input type="number" inputmode="decimal" min="0" step="${pieceG ? '0.5' : 'any'}" placeholder="${selFood ? '' : 'g/ml'}" value="${shownVal}" onchange="updateMealItem('${m.key}', '${cat.key}', ${idx}, null, this.value)" class="w-full bg-slate-50 border border-slate-200 rounded-lg p-1.5 ${selFood ? 'pr-6 text-right' : 'text-center'} focus:outline-none focus:ring-1 focus:ring-emerald-500">
+                      ${selFood ? `<span class="absolute right-1.5 top-1/2 -translate-y-1/2 text-[10px] text-slate-400 pointer-events-none">${esc(unitSuffix)}</span>` : ''}
+                    </div>
+                    <div class="w-[72px] shrink-0 text-right leading-tight">${infoHtml}</div>
+                  </div>`;
+              }).join('');
+
+              // 檢查該餐澱粉處是否需要顯示警語
+              const showCarbRuleWarning = cat.key === "carb" && (mealHasFruit || mealHasSalmon);
+
+              return `
+                <div class="space-y-1">
+                  <div class="flex items-center justify-between">
+                    <span class="font-semibold text-slate-500">${cat.label}</span>
+                    <button type="button" onclick="addSlot('${m.key}', '${cat.key}')" class="text-[11px] text-emerald-700 bg-emerald-50 hover:bg-emerald-100 px-2 py-0.5 rounded-md font-medium">＋ 加一項</button>
+                  </div>
+                  <div class="space-y-1.5">${rowHtml}</div>
+                  ${showCarbRuleWarning ? `
+                    <div class="text-[11px] text-amber-700 bg-amber-50 border border-amber-200 px-2.5 py-1 rounded-md flex items-center gap-1 mt-1 font-medium">
+                      <i data-lucide="alert-triangle" class="w-3.5 h-3.5 text-amber-600 shrink-0"></i>
+                      <span>此餐含有水果或高脂肉類時，建議澱粉份量減半。</span>
+                    </div>
+                  ` : ''}
+                </div>
+              `;
+            }).join('')}
+          </div>
+          <div class="pt-2 border-t border-dashed border-slate-200 space-y-1.5 text-xs">
+            ${extras.map((x, i) => `
+              <div class="flex items-center gap-2">
+                <button onclick="openManualModal('${m.key}', ${i})" class="flex-1 min-w-0 flex justify-between gap-2 text-left bg-amber-50 border border-amber-200 rounded-lg px-2.5 py-1.5">
+                  <span class="truncate text-slate-700">📝 ${esc(x.name || '外食')}</span>
+                  <span class="shrink-0 font-bold text-amber-700">${Math.round(x.cal)} kcal${x.protein > 0 ? ` · ${(Math.round(x.protein * 10) / 10)}g` : ''}</span>
+                </button>
+                <button onclick="deleteManual('${m.key}', ${i})" aria-label="刪除這筆" class="shrink-0 w-7 h-7 rounded-lg text-slate-400 hover:text-red-600 hover:bg-red-50 text-base leading-none">×</button>
+              </div>`).join('')}
+            <button onclick="openManualModal('${m.key}', null)" class="w-full text-amber-700 bg-amber-50/60 border border-dashed border-amber-300 rounded-lg py-1.5 font-medium hover:bg-amber-50">＋ 手動輸入外食 / 其他熱量</button>
+          </div>
+          </div>
+        `;
+        container.appendChild(card);
+      });
+
+      document.getElementById("stat-total-cal").innerText = Math.round(totalCal);
+      document.getElementById("stat-total-protein").innerText = totalProtein.toFixed(1);
+
+      const pf = state.profile, calOk = !!pf.calConfirmed, proOk = !!pf.proteinConfirmed;
+      const calPct = calOk ? Math.min(100, (totalCal / pf.calTarget) * 100) : 0;
+      const proPct = proOk ? Math.min(100, (totalProtein / pf.proteinTarget) * 100) : 0;
+
+      document.getElementById("bar-cal").style.width = `${calPct}%`;
+      document.getElementById("bar-protein").style.width = `${proPct}%`;
+      // 熱量：<90% 綠、90~100% 黃、超標紅；蛋白質達標顯示 ✓
+      const calTarget = pf.calTarget;
+      const tone = !calOk ? "neutral" : (totalCal > calTarget ? "red" : (totalCal >= calTarget * 0.9 ? "amber" : "emerald"));
+      const T = CAL_TONES[tone];
+      byId("card-cal").className = T.card;
+      byId("row-cal").className = T.row;
+      byId("stat-total-cal").className = T.stat;
+      byId("track-cal").className = T.track;
+      byId("bar-cal").className = T.bar;
+      const setLink = `<button type="button" onclick="switchTab('tab-profile')" class="underline">設定目標 ›</button>`;
+      byId("cal-target-text").innerHTML = !calOk ? setLink : (totalCal > calTarget ? `超標 +${Math.round(totalCal - calTarget)}` : `目標 ${calTarget}`);
+      byId("protein-target-text").innerHTML = !proOk ? setLink : `目標 ${pf.proteinTarget}g` + (totalProtein >= pf.proteinTarget ? " ✓" : "");
+
+      renderWeekStrip();
+      renderDayWeight();
+      renderBackupReminder();
+      lucide.createIcons();
+    }
+
+    // 各餐配色：早餐=琥珀、午餐=天藍、晚餐=靛藍、消夜=紫 (卡片左邊色條 + 標題列底色)
+    const MEAL_STYLE = {
+      breakfast: { bar: "border-l-amber-400", head: "bg-amber-50 border-amber-100", title: "text-amber-800", sub: "text-amber-700" },
+      lunch:     { bar: "border-l-sky-400", head: "bg-sky-50 border-sky-100", title: "text-sky-800", sub: "text-sky-700" },
+      dinner:    { bar: "border-l-indigo-400", head: "bg-indigo-50 border-indigo-100", title: "text-indigo-800", sub: "text-indigo-700" },
+      snack:     { bar: "border-l-purple-400", head: "bg-purple-50 border-purple-100", title: "text-purple-800", sub: "text-purple-700" }
+    };
+
+    const CAL_TONES = {
+      emerald: {
+        card: "bg-emerald-50 rounded-xl p-3 border border-emerald-100",
+        row: "flex justify-between items-center text-xs text-emerald-800 font-medium mb-1",
+        stat: "text-xl font-black text-emerald-700",
+        track: "w-full bg-emerald-200 h-2 rounded-full mt-2 overflow-hidden",
+        bar: "bg-emerald-500 h-full transition-all duration-300"
+      },
+      neutral: {
+        card: "bg-slate-50 rounded-xl p-3 border border-slate-200",
+        row: "flex justify-between items-center text-xs text-slate-600 font-medium mb-1",
+        stat: "text-xl font-black text-slate-700",
+        track: "w-full bg-slate-200 h-2 rounded-full mt-2 overflow-hidden",
+        bar: "bg-slate-400 h-full transition-all duration-300"
+      },
+      amber: {
+        card: "bg-amber-50 rounded-xl p-3 border border-amber-200",
+        row: "flex justify-between items-center text-xs text-amber-800 font-medium mb-1",
+        stat: "text-xl font-black text-amber-700",
+        track: "w-full bg-amber-200 h-2 rounded-full mt-2 overflow-hidden",
+        bar: "bg-amber-500 h-full transition-all duration-300"
+      },
+      red: {
+        card: "bg-red-50 rounded-xl p-3 border border-red-200",
+        row: "flex justify-between items-center text-xs text-red-800 font-medium mb-1",
+        stat: "text-xl font-black text-red-700",
+        track: "w-full bg-red-200 h-2 rounded-full mt-2 overflow-hidden",
+        bar: "bg-red-500 h-full transition-all duration-300"
+      }
+    };
+
+    // --- 食物選擇器 (搜尋 + 常用) ---
+    let picker = { mode: "meal", meal: null, cat: null, idx: 0 };
+
+    // 依「餐別 + 近期頻率」統計吃過的食物 (自動，不需維護)：同餐別權重 1、其他餐別 0.35，越近權重越高
+    function foodUsage(mealKey) {
+      const usage = {}, today = todayStr();
+      Object.keys(state.dailyLogs).forEach(ds => {
+        const age = daysBetween(ds, today);
+        if (age < 0 || age > 90) return;
+        const log = state.dailyLogs[ds];
+        if (!log || !log.meals) return;
+        Object.keys(log.meals).forEach(mk => {
+          const m = log.meals[mk] || {}, same = !mealKey || mk === mealKey;
+          CAT_KEYS.forEach(c => slotItems(m, c.key).forEach(it => {
+            if (!it || !it.id || !(it.weight > 0)) return;
+            const u = usage[it.id] || (usage[it.id] = { score: 0, n: 0 });
+            u.score += (same ? 1 : 0.35) * Math.exp(-age / 30);
+            if (same) u.n++;
+          }));
+        });
+      });
+      return usage;
+    }
+
+    // 名稱或別名符合 (搜尋用)
+    function foodMatches(f, q) {
+      if (!q) return true;
+      if (f.name.toLowerCase().includes(q)) return true;
+      return (f.aliases || []).some(a => String(a).toLowerCase().includes(q));
+    }
+
+    function openPicker(mealKey, catKey, idx, mode) {
+      picker = { mode: mode || "meal", meal: mealKey, cat: catKey, idx: idx || 0 };
+      const cat = CAT_KEYS.find(c => c.key === catKey);
+      byId("picker-title").innerText = (cat ? cat.label : "選擇食物") + (picker.idx > 0 ? ` · 第 ${picker.idx + 1} 項` : "");
+      byId("picker-search").value = "";
+      renderPickerList();
+      byId("modal-picker").classList.remove("hidden");
+      // 食物很多時直接開搜尋框；少時不彈鍵盤，避免擋住清單
+      if (state.foods.filter(f => f.category === catKey).length > 8) {
+        setTimeout(() => byId("picker-search").focus(), 50);
+      }
+    }
+
+    function renderPickerList() {
+      const q = byId("picker-search").value.trim().toLowerCase();
+      let curId = "";
+      if (picker.mode === "tpl") {
+        const c = tplDraft ? slotItems(tplDraft.items, picker.cat)[picker.idx] : null;
+        curId = c ? c.id : "";
+      } else {
+        const meal = ((state.dailyLogs[state.currentDate] || {}).meals || {})[picker.meal] || {};
+        const c = slotItems(meal, picker.cat)[picker.idx];
+        curId = c ? c.id : "";
+      }
+      const usage = foodUsage(picker.mode === "tpl" ? null : picker.meal);
+      const sc = (f) => (usage[f.id] ? usage[f.id].score : 0), byScore = (a, b) => sc(b) - sc(a);
+      const pool = state.foods.filter(f => f.category === picker.cat && foodMatches(f, q));
+      const favs = pool.filter(f => f.fav).sort(byScore);
+      const recents = pool.filter(f => !f.fav && usage[f.id] && usage[f.id].score >= 0.2).sort(byScore).slice(0, 8);
+      const rIds = new Set(recents.map(f => f.id));
+      const others = pool.filter(f => !f.fav && !rIds.has(f.id));
+      const badge = (f) => usage[f.id] && usage[f.id].n > 0 ? `<span class="text-[10px] text-emerald-700 bg-emerald-50 rounded px-1.5 ml-1 align-middle">近期 ${usage[f.id].n} 次</span>` : "";
+
+      const row = (f) => `
+        <div class="flex items-stretch gap-1">
+          <button type="button" onclick="pickFood('${f.id}')" class="flex-1 min-w-0 text-left px-3 py-2 rounded-xl border transition ${f.id === curId ? 'border-emerald-500 bg-emerald-50' : 'border-slate-200 hover:border-emerald-400 hover:bg-emerald-50'}">
+            <div class="font-semibold text-slate-800 truncate">${esc(f.name)}${badge(f)}</div>
+            <div class="text-[11px] text-slate-500">${libraryNutrition(f)}</div>
+          </button>
+          <button type="button" onclick="toggleFav('${f.id}')" aria-label="${f.fav ? '取消常用' : '設為常用'}" class="w-10 shrink-0 rounded-xl border border-slate-200 text-lg leading-none hover:bg-amber-50 ${f.fav ? 'text-amber-500' : 'text-slate-300'}">${f.fav ? '★' : '☆'}</button>
+        </div>`;
+
+      let html = "";
+      if (curId || picker.idx > 0) html += `<button type="button" onclick="pickFood('')" class="w-full text-left px-3 py-2 rounded-xl border border-dashed border-slate-300 text-slate-500 hover:bg-slate-50">${picker.idx > 0 ? "移除這一項" : "不選 / 清除這一格"}</button>`;
+      if (favs.length) html += `<div class="text-[11px] font-bold text-amber-600 pt-1">★ 常用</div>` + favs.map(row).join("");
+      if (recents.length) html += `<div class="text-[11px] font-bold text-emerald-700 pt-1">🕘 最近常吃${picker.mode === "tpl" ? "" : "（依這一餐的習慣自動排序）"}</div>` + recents.map(row).join("");
+      if (others.length) html += ((favs.length || recents.length) ? `<div class="text-[11px] font-bold text-slate-400 pt-1">全部</div>` : "") + others.map(row).join("");
+      if (!pool.length) html += `<div class="text-center text-slate-400 py-6">找不到符合的食物<br>可到「食材範本」新增食材，或用別名搜尋</div>`;
+      byId("picker-list").innerHTML = html;
+    }
+
+    function pickFood(foodId) {
+      closeModal("modal-picker");
+      if (picker.mode === "tpl") return tplSetFood(picker.cat, picker.idx, foodId);
+      if (foodId === "") {
+        const meal = ((state.dailyLogs[state.currentDate] || {}).meals || {})[picker.meal];
+        if (meal) {
+          const arr = slotItems(meal, picker.cat).slice();
+          arr.splice(picker.idx, 1);
+          meal[picker.cat] = arr;
+          saveState();
+          renderTracker();
+        }
+        return;
+      }
+      updateMealItem(picker.meal, picker.cat, picker.idx, foodId, null);
+    }
+
+    function toggleFav(foodId) {
+      const f = state.foods.find(x => x.id === foodId);
+      if (!f) return;
+      if (f.fav) delete f.fav; else f.fav = true;
+      saveState();
+      renderPickerList();
+      renderTracker();
+      renderLibrary();
+      if (tplDraft) renderTplEditor();
+    }
+
+    // --- 複製前一天的某一餐 ---
+    function mealHasItems(ds, mealKey) {
+      const m = ((state.dailyLogs[ds] || {}).meals || {})[mealKey];
+      if (!m) return false;
+      if (Array.isArray(m.extra) && m.extra.length) return true;
+      return CAT_KEYS.some(c => slotItems(m, c.key).some(it => it && it.id && it.weight > 0));
+    }
+
+    function copyMealFromPrev(mealKey) {
+      const mealDef = MEAL_TYPES.find(m => m.key === mealKey);
+      const mealName = mealDef.label.split(" ").slice(1).join(" ") || mealDef.label;
+      const cur = state.currentDate;
+
+      let src = addDays(cur, -1);
+      if (!mealHasItems(src, mealKey)) {
+        src = null;
+        for (let i = 2; i <= 14; i++) {
+          const d = addDays(cur, -i);
+          if (mealHasItems(d, mealKey)) { src = d; break; }
+        }
+        if (!src) return showToast(`前 14 天內沒有可複製的${mealName}紀錄`);
+        const md = `${parseDate(src).getMonth() + 1}/${parseDate(src).getDate()}`;
+        if (!confirm(`昨天沒有${mealName}紀錄，要改複製 ${md} 的${mealName}嗎？`)) return;
+      }
+
+      const snap = snapMeal(mealKey);
+      const copied = {};
+      const srcMeal = state.dailyLogs[src].meals[mealKey];
+      CAT_KEYS.forEach(c => {
+        // 食材若已被刪除就略過
+        const valid = slotItems(srcMeal, c.key)
+          .filter(it => it && it.id && it.weight > 0 && state.foods.some(f => f.id === it.id))
+          .map(it => ({ id: it.id, weight: it.weight }));
+        if (valid.length) copied[c.key] = valid;
+      });
+
+      if (Array.isArray(srcMeal.extra) && srcMeal.extra.length) copied.extra = clone(srcMeal.extra);
+      if (!state.dailyLogs[cur]) state.dailyLogs[cur] = { meals: {} };
+      if (!state.dailyLogs[cur].meals) state.dailyLogs[cur].meals = {};
+      state.dailyLogs[cur].meals[mealKey] = copied;
+      saveState();
+      renderTracker();
+      offerUndo(`已複製 ${parseDate(src).getMonth() + 1}/${parseDate(src).getDate()} 的${mealName}`, snap);
+    }
+
+    function getMealForEdit(mealKey) {
+      if (!state.dailyLogs[state.currentDate]) state.dailyLogs[state.currentDate] = { meals: {} };
+      const log = state.dailyLogs[state.currentDate];
+      if (!log.meals) log.meals = {};
+      if (!log.meals[mealKey]) log.meals[mealKey] = {};
+      return log.meals[mealKey];
+    }
+
+    function updateMealItem(mealKey, catKey, idx, foodId, weight) {
+      const meal = getMealForEdit(mealKey);
+      const arr = slotItems(meal, catKey).slice();
+      meal[catKey] = arr;
+      while (arr.length <= idx) arr.push({ id: "", weight: "" });
+      const slot = arr[idx];
+
+      if (foodId !== null) {
+        const oldFood = state.foods.find(f => f.id === slot.id);
+        const newFood = state.foods.find(f => f.id === foodId);
+        // 換食物時：原本沒填、或仍是舊食物的預設份量，就改用新食物的預設份量
+        const keepWeight = slot.weight > 0 && !(oldFood && slot.weight === defaultAmount(oldFood));
+        slot.id = foodId;
+        if (!keepWeight) slot.weight = defaultAmount(newFood);
+      }
+      if (weight !== null) {
+        const fd = state.foods.find(f => f.id === slot.id);
+        let w = weight === "" ? "" : parseFloat(weight);
+        if (w !== "" && isNaN(w)) w = "";
+        // 以「顆」等計數單位輸入時，換算成克儲存
+        if (w !== "" && fd && fd.pieceG > 0) w = Math.round(w * fd.pieceG * 100) / 100;
+        slot.weight = w;
+      }
+
+      saveState();
+      renderTracker();
+    }
+
+    // 同一分類再加一格 (例如一餐吃兩種蛋白質 2)
+    function addSlot(mealKey, catKey) {
+      const meal = getMealForEdit(mealKey);
+      const arr = slotItems(meal, catKey).slice();
+      if (!arr.length || !arr[arr.length - 1].id) return showToast("請先為上一格選擇食物");
+      arr.push({ id: "", weight: "" });
+      meal[catKey] = arr;
+      saveState();
+      renderTracker();
+    }
+
+    function clearMeal(mealKey) {
+      const snap = snapMeal(mealKey);
+      if (!snap.data) return showToast("這一餐本來就是空的");
+      delete state.dailyLogs[state.currentDate].meals[mealKey];
+      saveState();
+      renderTracker();
+      offerUndo("已清除這一餐", snap);
+    }
+
+    function tplSummary(t) {
+      const parts = [];
+      CAT_KEYS.forEach(c => slotItems(t.items || {}, c.key).forEach(it => {
+        const f = state.foods.find(x => x.id === it.id);
+        if (f) parts.push(`${f.name.replace(/\s*[\(（].*?[\)）]\s*/g, "")} ${formatAmount(f, it.weight)}`);
+      }));
+      const tot = mealTotals(t.items || {});
+      return { text: parts.join("、") || "（沒有可用的食材）", kcal: Math.round(tot.cal), protein: tot.protein.toFixed(1) };
+    }
+
+    // 逐項明細 (分類、食物、份量、熱量、蛋白質)
+    function tplDetailHtml(t) {
+      const rows = [];
+      CAT_KEYS.forEach(c => slotItems(t.items || {}, c.key).forEach(it => {
+        const f = state.foods.find(x => x.id === it.id);
+        rows.push(`<div class="flex justify-between gap-2 py-1.5 border-b border-slate-100">
+          <div class="min-w-0"><div class="text-[10px] text-slate-400">${esc(c.label.replace(/^\d+\.\s*/, ""))}</div>
+            <div class="text-slate-800">${f ? esc(f.name) : '<span class="text-red-500">（這個食物已被刪除）</span>'} ${f ? `<b>${esc(formatAmount(f, it.weight))}</b>` : ""}</div></div>
+          <div class="text-right shrink-0 text-[11px] leading-tight"><b class="text-emerald-700">${f ? Math.round(f.calPer100 * it.weight / 100) : 0} kcal</b><div class="text-blue-600">蛋白質 ${f ? (f.proteinPer100 * it.weight / 100).toFixed(1) : "0.0"}g</div></div></div>`);
+      }));
+      const tot = mealTotals(t.items || {});
+      return `<div>${rows.join("") || '<div class="text-slate-400 py-2">（空的範本）</div>'}
+        <div class="flex justify-between pt-2 text-xs font-bold text-slate-700"><span>合計</span><span>${Math.round(tot.cal)} kcal · 蛋白質 ${tot.protein.toFixed(1)}g</span></div></div>`;
+    }
+
+    let tplExpanded = null;
+    function openTplModal(mealKey) {
+      document.getElementById("tpl-target-meal").value = mealKey;
+      tplExpanded = null;
+      renderTplModalList();
+      document.getElementById("modal-tpl").classList.remove("hidden");
+    }
+    function toggleTplPreview(id) { tplExpanded = tplExpanded === id ? null : id; renderTplModalList(); }
+    function renderTplModalList() {
+      const mealKey = document.getElementById("tpl-target-meal").value, box = document.getElementById("modal-tpl-list");
+      if (!state.templates.length) {
+        box.innerHTML = `<div class="text-center text-slate-400 py-6 leading-relaxed">還沒有範本<br>把這一餐組好，按下方「存成範本」就能建立</div>`;
+        return;
+      }
+      box.innerHTML = state.templates.map(t => {
+        const sm = tplSummary(t), open = tplExpanded === t.id;
+        return `<div class="border rounded-xl ${open ? "border-emerald-500 bg-emerald-50/40" : "border-slate-200"}">
+          <button type="button" onclick="toggleTplPreview('${t.id}')" class="w-full text-left p-3">
+            <div class="flex justify-between items-start gap-2"><div class="font-bold text-slate-800">${esc(t.name)}</div><span class="text-slate-400 text-[11px] shrink-0">${open ? "收起 ▴" : "預覽 ▾"}</span></div>
+            <div class="text-[11px] text-emerald-700 font-medium">約 ${sm.kcal} kcal · 蛋白質 ${sm.protein}g</div>
+            ${open ? "" : `<div class="text-[11px] text-slate-500 leading-snug mt-0.5">${esc(sm.text)}</div>`}
+          </button>
+          ${open ? `<div class="px-3 pb-3 space-y-2">${tplDetailHtml(t)}
+            <div class="grid grid-cols-2 gap-2 pt-1"><button type="button" onclick="applyTemplate('${t.id}', '${mealKey}', 'replace')" class="w-btn text-xs">取代這一餐</button><button type="button" onclick="applyTemplate('${t.id}', '${mealKey}', 'add')" class="w-btn-s text-xs">加到這一餐</button></div>
+            <button type="button" onclick="closeModal('modal-tpl'); openTplEditor('${t.id}')" class="w-full text-xs text-emerald-700 font-medium py-1.5">✎ 編輯這個範本</button></div>` : ""}
+        </div>`;
+      }).join("");
+    }
+
+    function applyTemplate(tplId, mealKey, mode) {
+      const tpl = state.templates.find(t => t.id === tplId);
+      if (!tpl) return;
+      const snap = snapMeal(mealKey);
+      const meal = getMealForEdit(mealKey);
+      const items = normalizeMeal(clone(tpl.items || {}));
+      if (mode === "add") {
+        CAT_KEYS.forEach(c => {
+          const more = slotItems(items, c.key);
+          if (more.length) meal[c.key] = slotItems(meal, c.key).filter(it => it && it.id).concat(more);
+        });
+      } else {
+        const keepExtra = meal.extra;
+        if (Array.isArray(keepExtra) && keepExtra.length) items.extra = keepExtra;
+        state.dailyLogs[state.currentDate].meals[mealKey] = items;
+      }
+      saveState();
+      closeModal("modal-tpl");
+      renderTracker();
+      offerUndo(`已${mode === "add" ? "加入" : "套用"}「${tpl.name}」`, snap);
+    }
+
+    // ---- 範本編輯 ----
+    let tplDraft = null;
+    function openTplEditor(id) {
+      const t = id ? state.templates.find(x => x.id === id) : null;
+      if (id && !t) return;
+      tplDraft = { id: id || null, name: t ? t.name : "", items: normalizeMeal(clone(t ? t.items || {} : {})), dirty: false };
+      byId("tpl-edit-name").value = tplDraft.name;
+      byId("tpl-edit-del").classList.toggle("hidden", !id);
+      byId("modal-tpl-edit").classList.remove("hidden");
+      byId("modal-tpl-edit").scrollTop = 0;
+      renderTplEditor();
+    }
+    function closeTplEditor(force) {
+      if (!force && tplDraft && tplDraft.dirty && !confirm("有尚未儲存的修改，確定要放棄嗎？")) return;
+      byId("modal-tpl-edit").classList.add("hidden");
+      tplDraft = null;
+    }
+    function tplRowHtml(catKey, idx, it) {
+      const f = state.foods.find(x => x.id === it.id), w = parseFloat(it.weight) || 0;
+      const pieceG = f && f.pieceG > 0 ? f.pieceG : 0;
+      const suffix = f ? (pieceG ? (f.pieceName || "份") : (isLiquid(f) ? "ml" : "g")) : "";
+      const shown = (pieceG && w > 0) ? Math.round(w / pieceG * 100) / 100 : (it.weight || "");
+      const info = f && w > 0 ? `<div class="font-bold text-emerald-700">${Math.round(f.calPer100 * w / 100)} kcal</div><div class="text-[11px] text-blue-600">蛋白質 ${(f.proteinPer100 * w / 100).toFixed(1)}g</div>` : '<div class="text-slate-300 text-center">—</div>';
+      return `<div class="flex items-center gap-2">
+        <button type="button" onclick="openPicker(null, '${catKey}', ${idx}, 'tpl')" class="flex-1 min-w-0 flex items-center justify-between gap-1 bg-slate-50 border border-slate-200 rounded-lg p-1.5 text-left">
+          <span class="truncate ${f ? "text-slate-700" : "text-slate-400"}">${f ? (f.fav ? "★ " : "") + esc(f.name) : "-- 請選擇 --"}</span><i data-lucide="chevron-down" class="w-3.5 h-3.5 text-slate-400 shrink-0"></i>
+        </button>
+        <div class="relative w-[68px] shrink-0"><input type="number" inputmode="decimal" min="0" step="${pieceG ? "0.5" : "any"}" placeholder="${f ? "" : "g/ml"}" value="${shown}" onchange="tplAmount('${catKey}', ${idx}, this.value)" class="w-full bg-slate-50 border border-slate-200 rounded-lg p-1.5 ${f ? "pr-6 text-right" : "text-center"}">
+          ${f ? `<span class="absolute right-1.5 top-1/2 -translate-y-1/2 text-[10px] text-slate-400 pointer-events-none">${esc(suffix)}</span>` : ""}</div>
+        <div class="w-[72px] shrink-0 text-right leading-tight">${info}</div></div>`;
+    }
+    function renderTplEditor() {
+      const d = tplDraft;
+      if (!d) return;
+      const tot = mealTotals(d.items), pf = state.profile;
+      const pct = pf.calConfirmed && pf.calTarget ? Math.round(tot.cal / pf.calTarget * 100) : null;
+      byId("tpl-edit-sum").innerHTML = `<div class="w-card flex items-center justify-between text-xs"><div><div class="text-[11px] text-slate-500">這個範本合計</div><div class="text-xl font-black text-emerald-700">${Math.round(tot.cal)} <span class="text-xs font-medium">kcal</span></div></div><div class="text-right text-slate-600">蛋白質 <b>${tot.protein.toFixed(1)}</b> g${pct != null ? `<div class="text-[11px] text-slate-400">占每日目標 ${pct}%</div>` : ""}</div></div>`;
+      byId("tpl-edit-body").innerHTML = CAT_KEYS.map(cat => {
+        const items = slotItems(d.items, cat.key), rows = items.length ? items : [{ id: "", weight: "" }];
+        return `<div class="w-card space-y-1.5"><div class="flex items-center justify-between"><span class="font-semibold text-slate-500">${cat.label}</span><button type="button" onclick="tplAddSlot('${cat.key}')" class="text-[11px] text-emerald-700 bg-emerald-50 hover:bg-emerald-100 px-2 py-0.5 rounded-md font-medium">＋ 加一項</button></div>${rows.map((it, idx) => tplRowHtml(cat.key, idx, it)).join("")}</div>`;
+      }).join("");
+      lucide.createIcons();
+    }
+    function tplSetFood(cat, idx, foodId) {
+      const arr = slotItems(tplDraft.items, cat).slice();
+      tplDraft.items[cat] = arr;
+      if (foodId === "") arr.splice(idx, 1);
+      else {
+        while (arr.length <= idx) arr.push({ id: "", weight: "" });
+        const slot = arr[idx], oldF = state.foods.find(f => f.id === slot.id), newF = state.foods.find(f => f.id === foodId);
+        const keep = slot.weight > 0 && !(oldF && slot.weight === defaultAmount(oldF));
+        slot.id = foodId;
+        if (!keep) slot.weight = defaultAmount(newF);
+      }
+      tplDraft.dirty = true;
+      renderTplEditor();
+    }
+    function tplAmount(cat, idx, raw) {
+      const arr = slotItems(tplDraft.items, cat).slice();
+      tplDraft.items[cat] = arr;
+      const slot = arr[idx];
+      if (!slot) return;
+      const fd = state.foods.find(f => f.id === slot.id);
+      let w = raw === "" ? "" : parseFloat(raw);
+      if (w !== "" && isNaN(w)) w = "";
+      if (w !== "" && fd && fd.pieceG > 0) w = Math.round(w * fd.pieceG * 100) / 100;
+      slot.weight = w;
+      tplDraft.dirty = true;
+      renderTplEditor();
+    }
+    function tplAddSlot(cat) {
+      const arr = slotItems(tplDraft.items, cat).slice();
+      if (!arr.length || !arr[arr.length - 1].id) return showToast("請先為上一格選擇食物");
+      arr.push({ id: "", weight: "" });
+      tplDraft.items[cat] = arr;
+      tplDraft.dirty = true;
+      renderTplEditor();
+    }
+    function saveTplEditor() {
+      const d = tplDraft;
+      if (!d) return;
+      d.name = byId("tpl-edit-name").value;
+      const name = d.name.trim();
+      if (!name) return showToast("請輸入範本名稱");
+      const items = {};
+      CAT_KEYS.forEach(c => {
+        const v = slotItems(d.items, c.key).filter(it => it && it.id && it.weight > 0 && state.foods.some(f => f.id === it.id)).map(it => ({ id: it.id, weight: it.weight }));
+        if (v.length) items[c.key] = v;
+      });
+      if (!Object.keys(items).length) return showToast("範本裡至少要有一個食物（份量要大於 0）");
+      if (d.id) {
+        const t = state.templates.find(x => x.id === d.id);
+        if (t) { t.name = name; t.items = items; }
+      } else {
+        if (state.templates.some(t => t.name === name) && !confirm(`已經有名為「${name}」的範本，仍要另外新增一個嗎？`)) return;
+        state.templates.push({ id: "tpl_" + Date.now(), name, items });
+      }
+      saveState();
+      closeTplEditor(true);
+      renderLibrary();
+      showToast("範本已儲存");
+    }
+    function dupTplEditor() {
+      if (!tplDraft) return;
+      tplDraft.id = null;
+      tplDraft.name = (byId("tpl-edit-name").value.trim() || "範本") + "（副本）";
+      tplDraft.dirty = true;
+      byId("tpl-edit-name").value = tplDraft.name;
+      byId("tpl-edit-del").classList.add("hidden");
+      showToast("已改成新範本，改完按「儲存範本」建立");
+    }
+    function delTplEditor() {
+      if (!tplDraft || !tplDraft.id) return;
+      if (!confirm("確定刪除這個範本？")) return;
+      const idx = state.templates.findIndex(t => t.id === tplDraft.id);
+      const removed = state.templates.splice(idx, 1)[0];
+      saveState();
+      closeTplEditor(true);
+      renderLibrary();
+      showToast("範本已刪除", null, 8000, { label: "復原", fn: () => { state.templates.splice(Math.min(idx, state.templates.length), 0, removed); saveState(); renderLibrary(); } });
+    }
+
+    // --- 存成範本 ---
+    function buildItemsFromMeal(mealKey) {
+      const meal = ((state.dailyLogs[state.currentDate] || {}).meals || {})[mealKey];
+      if (!meal) return null;
+      const items = {};
+      CAT_KEYS.forEach(c => {
+        const valid = slotItems(meal, c.key)
+          .filter(it => it && it.id && it.weight > 0 && state.foods.some(f => f.id === it.id))
+          .map(it => ({ id: it.id, weight: it.weight }));
+        if (valid.length) items[c.key] = valid;
+      });
+      return Object.keys(items).length ? items : null;
+    }
+
+    function openTplSave(mealKey) {
+      closeModal("modal-tpl");
+      const dd = parseDate(state.currentDate);
+      byId("tpl-save-meal-label").innerText = `來源餐點（${dd.getMonth() + 1}/${dd.getDate()}）`;
+      const mealSel = byId("tpl-save-meal");
+      let firstFilled = null;
+      mealSel.innerHTML = MEAL_TYPES.map(m => {
+        const meal = ((state.dailyLogs[state.currentDate] || {}).meals || {})[m.key] || {};
+        const t = mealTotals(meal);
+        const filled = !!buildItemsFromMeal(m.key);
+        if (filled && !firstFilled) firstFilled = m.key;
+        return `<option value="${m.key}">${m.label}（${filled ? Math.round(t.cal) + " kcal" : "空的"}）</option>`;
+      }).join("");
+      mealSel.value = mealKey || firstFilled || MEAL_TYPES[0].key;
+
+      byId("tpl-save-target").innerHTML = `<option value="">＋ 存成新範本</option>` +
+        state.templates.map(t => `<option value="${esc(t.id)}">覆蓋：${esc(t.name)}</option>`).join("");
+      byId("tpl-save-name").value = "";
+      byId("modal-tpl-save").classList.remove("hidden");
+    }
+
+    function tplSaveTargetChanged() {
+      const t = state.templates.find(x => x.id === byId("tpl-save-target").value);
+      if (t) byId("tpl-save-name").value = t.name;
+    }
+
+    function saveTemplate() {
+      const name = byId("tpl-save-name").value.trim();
+      const items = buildItemsFromMeal(byId("tpl-save-meal").value);
+      const targetId = byId("tpl-save-target").value;
+      if (!items) return showToast("這一餐還沒有選擇食物，無法存成範本");
+      if (!name) return showToast("請輸入範本名稱");
+
+      if (targetId) {
+        const t = state.templates.find(x => x.id === targetId);
+        if (t) { t.name = name; t.items = items; }
+      } else {
+        const dup = state.templates.find(x => x.name === name);
+        if (dup) {
+          if (!confirm(`已經有名為「${name}」的範本，要覆蓋它嗎？`)) return;
+          dup.items = items;
+        } else {
+          state.templates.push({ id: "tpl_" + Date.now(), name, items });
+        }
+      }
+      saveState();
+      closeModal("modal-tpl-save");
+      renderLibrary();
+      showToast("範本已儲存");
+    }
+
+    function renameTemplate(id) {
+      const t = state.templates.find(x => x.id === id);
+      if (!t) return;
+      const n = prompt("範本名稱", t.name);
+      if (n && n.trim()) {
+        t.name = n.trim();
+        saveState();
+        renderLibrary();
+      }
+    }
+
+    // --- TAB 2: 趨勢與圖表 ---
+    let chartInstance = null;
+    function renderTrends() {
+      const dates = [];
+      for(let i=6; i>=0; i--) {
+        dates.push(addDays(todayStr(), -i));
+      }
+
+      const calData = [];
+      const weightData = [];
+
+      dates.forEach(d => {
+        const dayCal = state.dailyLogs[d] ? dayTotals(d).cal : 0;
+        calData.push(dayCal > 0 ? Math.round(dayCal) : null);
+        weightData.push(WT.dayMean(d));
+      });
+
+      const ctx = document.getElementById("chart-trends").getContext("2d");
+      applyChartTheme();
+      if(chartInstance) chartInstance.destroy();
+
+      chartInstance = new Chart(ctx, {
+        type: "line",
+        data: {
+          labels: dates.map(d => d.slice(5)),
+          datasets: [
+            {
+              label: "攝取熱量 (kcal)",
+              data: calData,
+              borderColor: "#10b981",
+              backgroundColor: "rgba(16, 185, 129, 0.1)",
+              yAxisID: "yCal",
+              spanGaps: true,
+              tension: 0.3,
+              fill: true
+            },
+            {
+              label: "體重 (kg)",
+              data: weightData,
+              borderColor: "#3b82f6",
+              backgroundColor: "#3b82f6",
+              yAxisID: "yWeight",
+              spanGaps: true,
+              tension: 0.3
+            }
+          ]
+        },
+        options: {
+          responsive: true,
+          maintainAspectRatio: false,
+          scales: {
+            yCal: {
+              type: "linear",
+              position: "left",
+              title: { display: true, text: "kcal", font: { size: 10 } },
+              grid: { display: false }
+            },
+            yWeight: {
+              type: "linear",
+              position: "right",
+              title: { display: true, text: "kg", font: { size: 10 } },
+              grid: { display: false }
+            }
+          }
+        }
+      });
+
+      const validCals = calData.filter(c => c);
+      if(validCals.length >= 1) {
+        const avgCal = validCals.reduce((a,b)=>a+b, 0) / validCals.length;
+        const slope = WT.slopePerWeek();
+        const lwT = getLatestWeight();
+        const tdeeCalc = lwT ? calcBMRTDEE(state.profile, lwT.w) : null;
+        const estTDEE = tdeeCalc ? tdeeCalc.tdee : (state.profile.calConfirmed ? state.profile.calTarget + 400 : null);
+        if (estTDEE == null) {
+          document.getElementById("trend-summary-text").innerText = "預估每週減脂量：資料不足";
+          document.getElementById("trend-summary-detail").innerText = `近 7 天平均每日攝取 ${Math.round(avgCal)} kcal。到「設定」填入性別、年齡並確認目標熱量後，才能估算熱量赤字。` + (slope == null ? "" : `近 4 週實測體重趨勢約 ${slope > 0 ? "+" : ""}${slope.toFixed(2)} kg/週。`);
+          return;
+        }
+        const dailyDeficit = estTDEE - avgCal;
+        const weeklyFatLoss = (dailyDeficit * 7) / 7700;
+
+        document.getElementById("trend-summary-text").innerText = `預估每週減純脂 ${Math.max(0, weeklyFatLoss).toFixed(2)} kg`;
+        document.getElementById("trend-summary-detail").innerText = `近 7 天平均每日攝取 ${Math.round(avgCal)} kcal，創造熱量赤字約 ${Math.round(dailyDeficit)} kcal/天（TDEE 估 ${Math.round(estTDEE)}${tdeeCalc ? "" : "；尚未設定性別與年齡，暫以目標熱量 +400 概估"}）。` + (slope == null ? "" : `近 4 週實測體重趨勢約 ${slope > 0 ? "+" : ""}${slope.toFixed(2)} kg/週（含水分波動，僅供對照）。`);
+      }
+    }
+
+    // --- TAB 3: 庫存與範本管理 ---
+    function renderLibrary() {
+      const foodContainer = document.getElementById("food-list-container");
+      foodContainer.innerHTML = "";
+
+      const q = (byId("food-search").value || "").trim().toLowerCase();
+      const shown = sortFoods(state.foods).filter(f => !q || foodMatches(f, q) || getCatLabel(f.category).toLowerCase().includes(q));
+      if (!shown.length) foodContainer.innerHTML = `<div class="text-center text-xs text-slate-400 py-4">找不到符合的食材</div>`;
+
+      shown.forEach(f => {
+        const item = document.createElement("div");
+        item.className = "flex justify-between items-center bg-slate-50 p-2.5 rounded-xl border border-slate-200 text-xs";
+        item.innerHTML = `
+          <div class="min-w-0">
+            <div class="font-bold text-slate-800">${f.fav ? '<span class="text-amber-500">★</span> ' : ''}${esc(f.name)} <span class="text-[10px] bg-slate-200 text-slate-600 px-1.5 py-0.5 rounded-md font-normal">${getCatLabel(f.category)}</span></div>
+            <div class="text-slate-500">${libraryNutrition(f)}</div>
+          </div>
+          <div class="flex gap-1 items-center shrink-0">
+            <button onclick="toggleFav('${f.id}')" aria-label="${f.fav ? '取消常用' : '設為常用'}" class="px-1 text-lg leading-none ${f.fav ? 'text-amber-500' : 'text-slate-300'} hover:text-amber-500">${f.fav ? '★' : '☆'}</button>
+            <button onclick="openFoodModal('${f.id}')" class="p-1 text-slate-500 hover:text-emerald-600"><i data-lucide="edit" class="w-4 h-4"></i></button>
+            <button onclick="deleteFood('${f.id}')" class="p-1 text-slate-500 hover:text-red-600"><i data-lucide="trash-2" class="w-4 h-4"></i></button>
+          </div>
+        `;
+        foodContainer.appendChild(item);
+      });
+
+      const tplContainer = document.getElementById("template-list-container");
+      tplContainer.innerHTML = "";
+
+      if (!state.templates.length) {
+        tplContainer.innerHTML = `<div class="text-center text-xs text-slate-400 py-4">還沒有範本</div>`;
+      }
+      state.templates.forEach(t => {
+        const sm = tplSummary(t);
+        const item = document.createElement("div");
+        item.className = "flex justify-between items-start gap-2 bg-slate-50 p-2.5 rounded-xl border border-slate-200 text-xs cursor-pointer hover:border-emerald-400";
+        item.onclick = () => openTplEditor(t.id);
+        item.innerHTML = `
+          <div class="min-w-0">
+            <div class="font-bold text-slate-800">${esc(t.name)}</div>
+            <div class="text-[11px] text-emerald-700 font-medium">約 ${sm.kcal} kcal · 蛋白質 ${sm.protein}g</div>
+            <div class="text-[11px] text-slate-500 leading-snug mt-0.5">${esc(sm.text)}</div>
+          </div>
+          <div class="flex items-center gap-1 shrink-0">
+            <span class="text-emerald-700 text-[11px] font-medium">編輯 ›</span>
+            <button data-del="1" aria-label="刪除" class="p-1 text-slate-400 hover:text-red-600"><i data-lucide="trash-2" class="w-4 h-4"></i></button>
+          </div>`;
+        item.querySelector("[data-del]").onclick = (ev) => { ev.stopPropagation(); deleteTemplate(t.id); };
+        tplContainer.appendChild(item);
+      });
+
+      lucide.createIcons();
+    }
+
+    function libraryNutrition(f) {
+      // 以「每單位」計的食品 (如每杯、每個)：直接顯示每單位熱量
+      if (f.unitOnly && f.pieceG > 0) {
+        const c = Math.round(f.calPer100 * f.pieceG / 100);
+        const p = (f.proteinPer100 * f.pieceG / 100).toFixed(1);
+        return `${c} kcal / ${p}g 蛋白質 (每${f.pieceName || "份"})`;
+      }
+      if (f.pieceG > 0) {
+        const c = Math.round(f.calPer100 * f.pieceG / 100);
+        const p = (f.proteinPer100 * f.pieceG / 100).toFixed(1);
+        return `${c} kcal / ${p}g 蛋白質 (每${f.pieceName || "份"} ${f.pieceG}${isLiquid(f) ? "ml" : "g"})`;
+      }
+      return `${f.calPer100} kcal / ${f.proteinPer100}g 蛋白質 (每 100${isLiquid(f) ? "ml" : "g"})`;
+    }
+
+    function updateFoodModalLabels() {
+      const liquid = document.getElementById("food-category").value === "drink";
+      const perUnit = document.getElementById("food-basis").value === "unit";
+      const base = liquid ? "100ml" : "100g";
+      const pn = document.getElementById("food-piece-name").value.trim() || "單位";
+      document.getElementById("lbl-food-cal").innerText = perUnit ? `每 1 ${pn} 熱量 (kcal)` : `每 ${base} 熱量 (kcal)`;
+      document.getElementById("lbl-food-protein").innerText = perUnit ? `每 1 ${pn} 蛋白質 (g)` : `每 ${base} 蛋白質 (g)`;
+      document.getElementById("lbl-food-piece").innerText = (liquid ? "每單位容量 ml" : "每單位重量 g") + (perUnit ? " (選填)" : "");
+    }
+
+    function getCatLabel(key) {
+      const cat = CAT_KEYS.find(c => c.key === key);
+      return cat ? cat.label : key;
+    }
+
+    function openFoodModal(foodId = null) {
+      document.getElementById("food-edit-id").value = foodId || "";
+      if(foodId) {
+        const food = state.foods.find(f => f.id === foodId);
+        if(!food) return;
+        document.getElementById("modal-food-title").innerText = "編輯食材";
+        document.getElementById("food-name").value = food.name;
+        document.getElementById("food-category").value = food.category;
+        const perUnit = !!(food.unitOnly && food.pieceG > 0);
+        document.getElementById("food-basis").value = perUnit ? "unit" : "per100";
+        document.getElementById("food-cal").value = perUnit ? Math.round(food.calPer100 * food.pieceG) / 100 : food.calPer100;
+        document.getElementById("food-protein").value = perUnit ? Math.round(food.proteinPer100 * food.pieceG) / 100 : food.proteinPer100;
+        document.getElementById("food-piece-name").value = food.pieceName || "";
+        document.getElementById("food-piece-g").value = perUnit ? "" : (food.pieceG || "");
+      } else {
+        document.getElementById("modal-food-title").innerText = "新增自定義食材";
+        document.getElementById("food-name").value = "";
+        document.getElementById("food-category").value = "protein1";
+        document.getElementById("food-basis").value = "per100";
+        document.getElementById("food-cal").value = "";
+        document.getElementById("food-protein").value = "";
+        document.getElementById("food-piece-name").value = "";
+        document.getElementById("food-piece-g").value = "";
+      }
+      updateFoodModalLabels();
+      const fdAlias = foodId ? state.foods.find(f => f.id === foodId) : null;
+      document.getElementById("food-aliases").value = fdAlias && fdAlias.aliases ? fdAlias.aliases.join(" / ") : "";
+      document.getElementById("modal-food").classList.remove("hidden");
+    }
+
+    function saveFoodFromModal() {
+      const editId = document.getElementById("food-edit-id").value;
+      const name = document.getElementById("food-name").value.trim();
+      const category = document.getElementById("food-category").value;
+      const cal = parseFloat(document.getElementById("food-cal").value);
+      const protein = parseFloat(document.getElementById("food-protein").value);
+
+      if(!name || isNaN(cal) || isNaN(protein)) return alert("請填寫完整的食材資料！");
+
+      const basis = document.getElementById("food-basis").value;
+      const pieceName = document.getElementById("food-piece-name").value.trim();
+      const pieceRaw = document.getElementById("food-piece-g").value.trim();
+      const pieceG = pieceRaw === "" ? 0 : parseFloat(pieceRaw);
+      let calPer100 = cal, proteinPer100 = protein, unitOnly = false, pieceGFinal = pieceG;
+
+      if (basis === "unit") {
+        if (!pieceName) return alert("以「每 1 單位」輸入時，請填寫計數單位（例：杯、包、片）！");
+        if (isNaN(pieceG) || pieceG < 0) return alert("每單位重量請輸入正數，或留空！");
+        pieceGFinal = pieceG > 0 ? pieceG : 100;      // 沒填重量時，以 100 當換算基準 (不影響熱量)
+        unitOnly = !(pieceG > 0);
+        calPer100 = Math.round(cal * 100 / pieceGFinal * 100) / 100;
+        proteinPer100 = Math.round(protein * 100 / pieceGFinal * 100) / 100;
+      } else if ((pieceName && !(pieceG > 0)) || (!pieceName && pieceG > 0) || isNaN(pieceG) || pieceG < 0) {
+        return alert("計數單位與每單位重量需要兩格都填（或兩格都留空）！");
+      }
+      const aliasList = (document.getElementById("food-aliases").value || "").split(/[\/、,，;；|]/).map(x => x.trim()).filter(Boolean);
+      const applyPiece = (food) => {
+        if (aliasList.length) food.aliases = aliasList; else delete food.aliases;
+        food.calPer100 = calPer100;
+        food.proteinPer100 = proteinPer100;
+        if (pieceName && pieceGFinal > 0) { food.pieceName = pieceName; food.pieceG = pieceGFinal; }
+        else { delete food.pieceName; delete food.pieceG; }
+        if (unitOnly) food.unitOnly = true; else delete food.unitOnly;
+      };
+
+      if(editId) {
+        const food = state.foods.find(f => f.id === editId);
+        if(food) {
+          food.name = name;
+          food.category = category;
+          food.calPer100 = cal;
+          food.proteinPer100 = protein;
+          food.unit = category === "drink" ? "ml" : (food.unit || "g");
+          applyPiece(food);
+        }
+      } else {
+        const newFood = {
+          id: "custom_" + Date.now(),
+          name, category, calPer100: cal, proteinPer100: protein, unit: category === "drink" ? "ml" : "g"
+        };
+        applyPiece(newFood);
+        state.foods.push(newFood);
+      }
+
+      saveState();
+      closeModal("modal-food");
+      renderLibrary();
+    }
+
+    function deleteFood(id) {
+      if(confirm("確定要刪除此食材嗎？")) {
+        state.foods = state.foods.filter(f => f.id !== id);
+        saveState();
+        renderLibrary();
+      }
+    }
+
+    function deleteTemplate(id) {
+      if(confirm("確定要刪除此範本嗎？")) {
+        state.templates = state.templates.filter(t => t.id !== id);
+        saveState();
+        renderLibrary();
+      }
+    }
+
+    // --- CSV 匯出 / 匯入邏輯 ---
+    const CAT_NAME = { fixed: "固定蛋白質", vege: "蔬菜", protein1: "主肉類", protein2: "豆乳蛋白", carb: "澱粉", fruit: "水果", fat: "油脂堅果", cheat: "作弊食物", drink: "飲料湯品" };
+    const CSV_HEAD = ["名稱", "分類", "營養基準", "熱量(kcal)", "蛋白質(g)", "單位名稱", "每單位重量", "常用", "別名", "id"];
+    const csvq = (v) => '"' + String(v == null ? "" : v).replace(/"/g, '""') + '"';
+    const csvText = (rows) => "\uFEFF" + [CSV_HEAD].concat(rows).map(r => r.map(csvq).join(",")).join("\r\n") + "\r\n";
+
+    function exportFoodsCSV() {
+      const rows = state.foods.map(f => {
+        const unitOnly = !!(f.unitOnly && f.pieceG > 0);
+        const basis = unitOnly ? `每1${f.pieceName || "份"}` : (isLiquid(f) ? "每100ml" : "每100g");
+        const cal = unitOnly ? Math.round(f.calPer100 * f.pieceG) / 100 : f.calPer100;
+        const pro = unitOnly ? Math.round(f.proteinPer100 * f.pieceG) / 100 : f.proteinPer100;
+        return [f.name, CAT_NAME[f.category] || f.category, basis, cal, pro, f.pieceName || "", unitOnly ? "" : (f.pieceG || ""), f.fav ? "是" : "", (f.aliases || []).join(" / "), f.id];
+      });
+      downloadCSV(csvText(rows), "foods.csv");
+    }
+
+    function downloadSampleCSV() {
+      downloadCSV(csvText([
+        ["範例-舒肥雞胸", "主肉類", "每100g", 115, 24, "", "", "是", "雞胸 / 舒肥", ""],
+        ["範例-即溶咖啡", "飲料湯品", "每1杯", 51, 1.5, "杯", "", "是", "三合一 / 雀巢", ""],
+        ["範例-水煮蛋", "固定蛋白質", "每100g", 155, 13, "顆", 60, "", "蛋 / 白煮蛋", ""]
+      ]), "foods_sample.csv");
+    }
+
+    function csvParse(text) {
+      const rows = []; let row = [], f = "", q = false;
+      text = text.replace(/^\uFEFF/, "");
+      for (let i = 0; i < text.length; i++) {
+        const c = text[i];
+        if (q) { if (c === '"') { if (text[i + 1] === '"') { f += '"'; i++; } else q = false; } else f += c; }
+        else if (c === '"') q = true;
+        else if (c === ",") { row.push(f); f = ""; }
+        else if (c === "\n" || c === "\r") { if (c === "\r" && text[i + 1] === "\n") i++; row.push(f); f = ""; rows.push(row); row = []; }
+        else f += c;
+      }
+      if (f !== "" || row.length) { row.push(f); rows.push(row); }
+      return rows.filter(r => r.some(x => String(x).trim() !== ""));
+    }
+
+    function resolveCategory(raw) {
+      const t = String(raw || "").trim().toLowerCase();
+      if (!t) return "";
+      if (CAT_NAME[t]) return t;                                  // 英文代碼 (相容舊格式)
+      for (const k in CAT_NAME) if (CAT_NAME[k] === t) return k;  // 完整中文名稱
+      const rules = [["fixed", /固定/], ["vege", /蔬|菜|纖維/], ["protein2", /豆|乳|奶|副蛋白|蛋白質\s*2|補充/], ["protein1", /肉|魚|海鮮|蝦|主蛋白|蛋白質\s*1/], ["carb", /澱粉|飯|麵|主食|穀|薯/], ["fruit", /果/], ["fat", /油|堅果|脂/], ["cheat", /作弊|外食|零食|炸|甜點|超商/], ["drink", /飲|湯|茶|咖啡/]];
+      for (const [k, re] of rules) if (re.test(t)) return k;
+      return "";
+    }
+
+    // 把 CSV 列轉成「新增 / 更新 / 有問題」清單 (先預覽，不直接改資料)
+    function buildFoodOps(rows) {
+      if (rows.length < 2) throw new Error("檔案裡沒有資料列");
+      const head = rows[0].map(h => String(h).replace(/[（(].*?[）)]/g, "").replace(/\s/g, "").toLowerCase());
+      const col = (...names) => { for (const n of names) { const i = head.indexOf(n.toLowerCase()); if (i >= 0) return i; } return -1; };
+      const cName = col("名稱", "name", "食物", "食材"), cCat = col("分類", "category", "類別"), cBasis = col("營養基準", "基準", "basis");
+      const cCal = col("熱量", "kcal", "cal", "calper100"), cPro = col("蛋白質", "protein", "proteinper100");
+      const cPname = col("單位名稱", "單位", "piecename"), cPg = col("每單位重量", "單位重量", "pieceg"), cFav = col("常用", "fav");
+      const cAlias = col("別名", "aliases", "alias"), cId = col("id"), cUnitOnly = col("unitonly");
+      if (cName < 0 || cCat < 0 || cCal < 0) throw new Error("找不到必要欄位：名稱、分類、熱量（建議先下載「食材範例檔」對照）");
+      const legacy = head.includes("calper100");
+      const num = (v) => { const m = String(v == null ? "" : v).replace(/,/g, "").match(/-?\d+(?:\.\d+)?/); return m ? parseFloat(m[0]) : NaN; };
+      const r2 = (x) => Math.round(x * 100) / 100;
+      const ops = [], seen = new Set();
+
+      rows.slice(1).forEach((r, k) => {
+        const line = k + 2, g = (i) => (i >= 0 && i < r.length ? String(r[i]).trim() : "");
+        const name = g(cName);
+        if (!name) return;
+        const err = (msg) => ops.push({ kind: "error", line, name, msg });
+        const catKey = resolveCategory(g(cCat));
+        let cal = num(g(cCal)), pro = g(cPro) === "" ? 0 : num(g(cPro));
+        let basisRaw = g(cBasis), unitName = g(cPname), pgv = num(g(cPg));
+        if (!catKey) return err(`分類無法辨識：「${g(cCat)}」`);
+        if (isNaN(cal) || cal < 0) return err("熱量不是有效數字");
+        if (isNaN(pro) || pro < 0) return err("蛋白質不是有效數字");
+        if (seen.has(name)) return err("檔案中名稱重複，已略過");
+        seen.add(name);
+
+        // 舊格式 (calPer100 + unitOnly)：轉成「每單位」寫法
+        if (legacy && g(cUnitOnly) === "1" && pgv > 0) { cal = r2(cal * pgv / 100); pro = r2(pro * pgv / 100); basisRaw = `每1${unitName || "份"}`; pgv = NaN; }
+
+        const b = basisRaw.replace(/\s/g, "").toLowerCase();
+        const isMl = /ml|毫升|cc/.test(b);
+        let perUnit = false;
+        if (b && !/100/.test(b)) {
+          perUnit = true;
+          if (!unitName) { unitName = b.replace(/^每?1?/, ""); if (!unitName || unitName === "單位") unitName = "份"; }
+        } else if (!b && unitName && !(pgv > 0)) perUnit = true;
+
+        const food = { name, category: catKey, unit: (catKey === "drink" || isMl) ? "ml" : "g" };
+        if (perUnit) {
+          const pgF = pgv > 0 ? pgv : 100;
+          food.calPer100 = r2(cal * 100 / pgF); food.proteinPer100 = r2(pro * 100 / pgF);
+          food.pieceName = unitName; food.pieceG = pgF;
+          if (!(pgv > 0)) food.unitOnly = true;
+        } else {
+          food.calPer100 = cal; food.proteinPer100 = pro;
+          if (unitName && pgv > 0) { food.pieceName = unitName; food.pieceG = pgv; }
+        }
+        const favRaw = g(cFav);
+        if (favRaw) food.fav = /^(是|y|yes|1|true|✓|v|★|x)$/i.test(favRaw);
+        const aliasRaw = g(cAlias);
+        if (aliasRaw) food.aliases = aliasRaw.split(/[\/、,，;；|]/).map(x => x.trim()).filter(Boolean);
+
+        const idv = g(cId);
+        let idx = idv ? state.foods.findIndex(f => f.id === idv) : -1;
+        if (idx < 0) idx = state.foods.findIndex(f => f.name === name);
+        ops.push({ kind: idx >= 0 ? "update" : "add", line, name, food, idx, id: idv });
+      });
+      return ops;
+    }
+
+    let csvPending = null;
+    function importFoodsCSV(e) {
+      const file = e.target.files[0];
+      if (!file) return;
+      const reader = new FileReader();
+      reader.onload = (ev) => {
+        try {
+          const text = String(ev.target.result || "");
+          if (text.includes("\uFFFD")) throw new Error("檔案不是 UTF-8 編碼。請在 Excel 另存為「CSV UTF-8（逗號分隔）」後再匯入。");
+          csvPending = buildFoodOps(csvParse(text));
+          byId("csv-add-only").checked = false;
+          renderCsvPreview();
+          byId("modal-csv-preview").classList.remove("hidden");
+        } catch (err) { alert("無法匯入：" + err.message); }
+        e.target.value = "";
+      };
+      reader.readAsText(file);
+    }
+    function closeCsvPreview() { byId("modal-csv-preview").classList.add("hidden"); csvPending = null; }
+    function renderCsvPreview() {
+      if (!csvPending) return;
+      const addOnly = byId("csv-add-only").checked;
+      const adds = csvPending.filter(o => o.kind === "add"), ups = csvPending.filter(o => o.kind === "update"), errs = csvPending.filter(o => o.kind === "error");
+      const names = (list) => list.slice(0, 6).map(o => esc(o.name)).join("、") + (list.length > 6 ? `…等 ${list.length} 項` : "");
+      let html = "";
+      html += `<div class="bg-emerald-50 border border-emerald-200 rounded-xl p-2.5"><b class="text-emerald-800">新增 ${adds.length} 項</b>${adds.length ? `<div class="text-slate-600 mt-0.5">${names(adds)}</div>` : ""}</div>`;
+      html += `<div class="bg-sky-50 border border-sky-200 rounded-xl p-2.5 ${addOnly ? "opacity-50" : ""}"><b class="text-sky-800">更新 ${ups.length} 項</b>${addOnly ? "（已勾選：不更新）" : ""}${ups.length ? `<div class="text-slate-600 mt-0.5">${names(ups)}</div>` : ""}</div>`;
+      if (errs.length) html += `<div class="bg-red-50 border border-red-200 rounded-xl p-2.5"><b class="text-red-700">有問題 ${errs.length} 列（不會匯入）</b><ul class="mt-1 space-y-0.5 text-slate-600">${errs.slice(0, 8).map(o => `<li>第 ${o.line} 列「${esc(o.name)}」：${esc(o.msg)}</li>`).join("")}${errs.length > 8 ? `<li>…還有 ${errs.length - 8} 列</li>` : ""}</ul></div>`;
+      byId("csv-preview-body").innerHTML = html;
+      byId("csv-apply-btn").disabled = !(adds.length || (!addOnly && ups.length));
+      byId("csv-apply-btn").classList.toggle("opacity-40", byId("csv-apply-btn").disabled);
+    }
+    function applyCsvImport() {
+      if (!csvPending) return;
+      const addOnly = byId("csv-add-only").checked, before = clone(state.foods);
+      let a = 0, u = 0, n = 0;
+      csvPending.forEach(op => {
+        if (op.kind === "add") {
+          const id = op.id && !state.foods.some(f => f.id === op.id) ? op.id : "csv_" + Date.now() + "_" + (n++);
+          state.foods.push(Object.assign({ id }, op.food));
+          a++;
+        } else if (op.kind === "update" && !addOnly) {
+          const f = state.foods[op.idx], keepFav = f.fav, keepAliases = f.aliases;
+          ["pieceName", "pieceG", "unitOnly", "fav", "aliases"].forEach(k => delete f[k]);
+          Object.assign(f, op.food);
+          if (op.food.fav === undefined && keepFav) f.fav = keepFav;
+          if (!op.food.aliases && keepAliases) f.aliases = keepAliases;
+          u++;
+        }
+      });
+      saveState();
+      closeCsvPreview();
+      renderLibrary();
+      showToast(`已新增 ${a} 項、更新 ${u} 項`, null, 9000, { label: "復原", fn: () => { state.foods = before; saveState(); renderLibrary(); renderTracker(); } });
+    }
+
+    function exportTemplatesCSV() {
+      let csv = "\uFEFFid,name,itemsJSON\n";
+      state.templates.forEach(t => {
+        const jsonStr = JSON.stringify(t.items).replace(/"/g, '""');
+        csv += `"${t.id}","${t.name}","${jsonStr}"\n`;
+      });
+      downloadCSV(csv, "fat_loss_templates.csv");
+    }
+
+    function importTemplatesCSV(e) {
+      const file = e.target.files[0];
+      if(!file) return;
+      const reader = new FileReader();
+      reader.onload = function(evt) {
+        const lines = evt.target.result.split("\n");
+        let count = 0;
+        for(let i=1; i<lines.length; i++) {
+          const line = lines[i].trim();
+          if(!line) continue;
+          try {
+            const parts = line.match(/(".*?"|[^",\s]+)(?=\s*,|\s*$)/g);
+            if(parts && parts.length >= 3) {
+              const id = parts[0].replace(/^"|"$/g, "");
+              const name = parts[1].replace(/^"|"$/g, "");
+              const rawJson = parts[2].replace(/^"|"$/g, "").replace(/""/g, '"');
+              const items = normalizeMeal(JSON.parse(rawJson));
+
+              const existingIdx = state.templates.findIndex(t => t.id === id);
+              if(existingIdx >= 0) {
+                state.templates[existingIdx] = { id, name, items };
+              } else {
+                state.templates.push({ id: id || ("tpl_"+Date.now()), name, items });
+              }
+              count++;
+            }
+          } catch(err) {}
+        }
+        saveState();
+        renderLibrary();
+        alert(`成功匯入 ${count} 筆範本資料！`);
+      };
+      reader.readAsText(file);
+    }
+
+    function downloadCSV(csvContent, fileName) {
+      const blob = new Blob([csvContent], { type: 'text/csv;charset=utf-8;' });
+      const link = document.createElement("a");
+      const url = URL.createObjectURL(blob);
+      link.setAttribute("href", url);
+      link.setAttribute("download", fileName);
+      link.style.visibility = 'hidden';
+      document.body.appendChild(link);
+      link.click();
+      document.body.removeChild(link);
+    }
+
+    // --- TAB 4: 個人設定 ---
+    function renderProfile() {
+      const pf = state.profile;
+      byId("profile-height").value = pf.height;
+      byId("profile-cal-target").value = pf.calTarget;
+      byId("profile-protein-target").value = pf.proteinTarget;
+      byId("profile-sex").value = pf.sex || "";
+      byId("profile-age").value = pf.age || "";
+      byId("profile-activity").value = String(pf.activity || 1.375);
+      renderBodyCard();
+      renderBackupStatus();
+      updateRestoreButton();
+      updateStorageNote(false);
+    }
+
+    function saveProfile() {
+      const h = parseFloat(byId("profile-height").value);
+      const c = parseFloat(byId("profile-cal-target").value);
+      const p = parseFloat(byId("profile-protein-target").value);
+      const ageRaw = byId("profile-age").value.trim();
+      const age = ageRaw === "" ? "" : parseFloat(ageRaw);
+
+      if(isNaN(h) || isNaN(c) || isNaN(p)) return alert("請填寫正確的設定數值！");
+      if(age !== "" && (isNaN(age) || age < 10 || age > 100)) return alert("年齡請輸入 10–100 之間的數字！");
+
+      state.profile.height = h;
+      state.profile.calTarget = c;
+      state.profile.proteinTarget = p;
+      state.profile.sex = byId("profile-sex").value;
+      state.profile.age = age;
+      state.profile.activity = parseFloat(byId("profile-activity").value) || 1.375;
+      // 使用者親自按下儲存 = 確認過這些數字
+      state.profile.heightConfirmed = true;
+      state.profile.calConfirmed = true;
+      state.profile.proteinConfirmed = true;
+
+      saveState();
+      renderTracker();
+      WT.render();
+      showToast("設定已儲存");
+    }
+
+    function fillCalTarget(n) {
+      byId("profile-cal-target").value = n;
+      showToast(`已填入 ${n} kcal，記得按「儲存設定」`);
+    }
+    function fillProteinTarget(n) {
+      byId("profile-protein-target").value = n;
+      showToast(`已填入 ${n} g，記得按「儲存設定」`);
+    }
+
+    // BMI / BMR / TDEE 卡片 (以輸入框目前的值即時試算，不需先儲存)
+    function renderBodyCard() {
+      const box = byId("body-card-content");
+      if (!box) return;
+      const lw = getLatestWeight();
+      if (!lw) {
+        box.innerHTML = `<p class="text-slate-500 leading-relaxed">還沒有體重紀錄。到「體重」分頁記錄體重後，這裡會自動算出 BMI、BMR 與 TDEE。</p>`;
+        return;
+      }
+      const h = parseFloat(byId("profile-height").value);
+      const age = parseFloat(byId("profile-age").value);
+      const sex = byId("profile-sex").value;
+      const act = parseFloat(byId("profile-activity").value) || 1.375;
+      const dd = parseDate(lw.date);
+
+      const row = (label, val, sub) => `
+        <div class="flex justify-between items-baseline gap-3 py-1.5 border-b border-slate-100">
+          <span class="text-slate-500 shrink-0">${label}</span>
+          <span class="text-right"><span class="font-bold text-slate-800">${val}</span>${sub ? `<span class="block text-[10px] text-slate-400">${sub}</span>` : ""}</span>
+        </div>`;
+
+      let html = state.profile.heightConfirmed ? "" : `<p class="mb-2 text-amber-700 bg-amber-50 border border-amber-200 rounded-lg px-2.5 py-1.5">身高目前還是預設值（${state.profile.height} cm），請填你的實際身高並按「儲存設定」，BMI 與 TDEE 才準。</p>`;
+      html += row("目前體重", `${lw.w} kg`, `取自 ${dd.getMonth() + 1}/${dd.getDate()} 的紀錄`);
+
+      const hOk = h >= 100 && h <= 230;
+      if (hOk) {
+        const b = bmiInfo(lw.w, h);
+        const lo = (18.5 * Math.pow(h / 100, 2)).toFixed(1);
+        const hi = (24 * Math.pow(h / 100, 2)).toFixed(1);
+        html += row("BMI", `<span class="${b.tone}">${b.bmi.toFixed(1)}（${b.label}）</span>`, `正常範圍 18.5–24，對應體重約 ${lo}–${hi} kg`);
+      } else {
+        html += `<p class="py-2 text-slate-400">填入身高 (100–230 cm) 即可計算 BMI。</p>`;
+      }
+
+      const t = (hOk && sex && age >= 10 && age <= 100) ? calcBMRTDEE({ sex, age, height: h, activity: act }, lw.w) : null;
+      if (t) {
+        const s1 = Math.round((t.tdee - 300) / 10) * 10;
+        const s2 = Math.round((t.tdee - 500) / 10) * 10;
+        const low = (n) => n < t.bmr ? `<span class="block text-[10px] text-red-500">低於基礎代謝</span>` : "";
+        // 依「體重」分頁的減重計畫換算：每週目標減量 × 7700 kcal ÷ 7
+        const pd = WT.planDeficit();
+        const s3 = pd ? Math.round((t.tdee - pd.perDay) / 10) * 10 : 0;
+        const planBtn = pd ? `<button type="button" onclick="fillCalTarget(${s3})" class="w-full border border-sky-200 bg-sky-50 text-sky-700 rounded-xl py-2 font-medium">依你的體重計畫（每週 −${pd.perWeek.toFixed(2)} kg ≈ 每日缺口 ${Math.round(pd.perDay)} kcal）<span class="block text-base font-black">${s3} <span class="text-[10px] font-medium">kcal</span></span>${low(s3)}</button>` : "";
+        const pLo = Math.round(lw.w * 1.6), pHi = Math.round(lw.w * 2.0), pMid = Math.round(lw.w * 1.8);
+        html += row("BMR 基礎代謝", `約 ${Math.round(t.bmr)} kcal`, "完全躺著不動一天的消耗");
+        html += row("TDEE 每日總消耗", `約 ${Math.round(t.tdee)} kcal`, "含日常活動與運動");
+        html += `
+          <div class="pt-3 space-y-2">
+            <div class="text-slate-500 font-semibold">減脂熱量建議（TDEE 減去缺口）</div>
+            <div class="grid grid-cols-2 gap-2">
+              <button type="button" onclick="fillCalTarget(${s1})" class="border border-emerald-200 bg-emerald-50 text-emerald-700 rounded-xl py-2 font-medium">溫和 −300<span class="block text-base font-black">${s1} <span class="text-[10px] font-medium">kcal</span></span>${low(s1)}</button>
+              <button type="button" onclick="fillCalTarget(${s2})" class="border border-emerald-200 bg-emerald-50 text-emerald-700 rounded-xl py-2 font-medium">標準 −500<span class="block text-base font-black">${s2} <span class="text-[10px] font-medium">kcal</span></span>${low(s2)}</button>
+            </div>
+            ${planBtn}
+            <div class="flex items-center justify-between gap-3 pt-1">
+              <span class="text-slate-500">蛋白質建議 <b class="text-slate-700">${pLo}–${pHi} g</b>（1.6–2.0 g/公斤）</span>
+              <button type="button" onclick="fillProteinTarget(${pMid})" class="shrink-0 border border-blue-200 bg-blue-50 text-blue-700 rounded-xl px-3 py-1.5 font-medium">填入 ${pMid}g</button>
+            </div>
+          </div>`;
+      } else if (hOk) {
+        html += `<p class="py-2 text-slate-400">選擇性別並填入年齡，即可估算 BMR 與 TDEE。</p>`;
+      }
+      html += `<p class="pt-3 text-[10px] text-slate-400 leading-relaxed">BMR 採 Mifflin-St Jeor 公式，TDEE = BMR × 活動係數，皆為估算值，實際可能相差 ±10%。建議先照估算吃 2–3 週，再依體重變化微調；活動量不確定時請選低一級。</p>`;
+      box.innerHTML = html;
+    }
+
+    // --- 手動輸入熱量 (外食 / 其他) ---
+    function getRecentManuals() {
+      const seen = new Map();
+      Object.keys(state.dailyLogs).sort().reverse().some(ds => {
+        const meals = (state.dailyLogs[ds] || {}).meals || {};
+        Object.values(meals).forEach(m => {
+          (m && Array.isArray(m.extra) ? m.extra : []).forEach(x => { if (x && x.name && !seen.has(x.name)) seen.set(x.name, x); });
+        });
+        return seen.size >= 20;
+      });
+      return seen;
+    }
+
+    function openManualModal(mealKey, idx) {
+      byId("manual-meal").value = mealKey;
+      byId("manual-index").value = idx === null ? "" : idx;
+      const meal = ((state.dailyLogs[state.currentDate] || {}).meals || {})[mealKey] || {};
+      const item = idx !== null && Array.isArray(meal.extra) ? meal.extra[idx] : null;
+      byId("manual-title").innerText = item ? "編輯手動輸入" : "手動輸入熱量 (外食 / 其他)";
+      byId("manual-name").value = item ? (item.name || "") : "";
+      byId("manual-cal").value = item ? item.cal : "";
+      byId("manual-protein").value = item && item.protein ? item.protein : "";
+      byId("manual-names").innerHTML = Array.from(getRecentManuals().keys()).map(n => `<option value="${esc(n)}"></option>`).join("");
+      byId("modal-manual").classList.remove("hidden");
+      setTimeout(() => byId(item || byId("manual-name").value ? "manual-cal" : "manual-name").focus(), 50);
+    }
+
+    // 選到曾輸入過的名稱時，自動帶入上次的熱量 / 蛋白質
+    function manualNameInput() {
+      const n = byId("manual-name").value.trim();
+      if (!n || byId("manual-cal").value !== "") return;
+      const x = getRecentManuals().get(n);
+      if (x) {
+        byId("manual-cal").value = x.cal;
+        byId("manual-protein").value = x.protein || "";
+      }
+    }
+
+    function saveManual() {
+      const mealKey = byId("manual-meal").value;
+      const idxRaw = byId("manual-index").value;
+      const cal = parseFloat(byId("manual-cal").value);
+      let pro = parseFloat(byId("manual-protein").value);
+      if (isNaN(pro)) pro = 0;
+      if (isNaN(cal) || cal < 0) return showToast("請輸入熱量 (kcal)");
+      if (cal > 10000 || pro < 0 || pro > 1000) return showToast("數值看起來不太對，請再確認");
+
+      const name = byId("manual-name").value.trim() || "外食";
+      if (!state.dailyLogs[state.currentDate]) state.dailyLogs[state.currentDate] = { meals: {} };
+      const log = state.dailyLogs[state.currentDate];
+      if (!log.meals) log.meals = {};
+      if (!log.meals[mealKey]) log.meals[mealKey] = {};
+      const meal = log.meals[mealKey];
+      if (!Array.isArray(meal.extra)) meal.extra = [];
+
+      const entry = { name, cal: Math.round(cal * 10) / 10, protein: Math.round(pro * 10) / 10 };
+      if (idxRaw !== "") meal.extra[parseInt(idxRaw, 10)] = entry; else meal.extra.push(entry);
+
+      saveState();
+      closeModal("modal-manual");
+      renderTracker();
+      showToast(`已加入 ${Math.round(entry.cal)} kcal`);
+    }
+
+    function deleteManual(mealKey, idx) {
+      const meal = ((state.dailyLogs[state.currentDate] || {}).meals || {})[mealKey];
+      if (!meal || !Array.isArray(meal.extra)) return;
+      meal.extra.splice(idx, 1);
+      if (!meal.extra.length) delete meal.extra;
+      saveState();
+      renderTracker();
+      showToast("已刪除");
+    }
+
+    // --- 完整備份 (JSON) ---
+    function buildBackup() {
+      return {
+        app: "fat-loss-pwa",
+        dataVersion: DATA_VERSION,
+        exportedAt: new Date().toISOString(),
+        data: { profile: state.profile, foods: state.foods, templates: state.templates, dailyLogs: state.dailyLogs, weight: state.weight }
+      };
+    }
+
+    function markBackedUp() {
+      localStorage.setItem(LS_LAST_BACKUP, todayStr());
+      renderBackupStatus();
+      renderBackupReminder();
+    }
+
+    async function exportFullBackup() {
+      const json = JSON.stringify(buildBackup(), null, 2);
+      const name = `fat_loss_backup_${todayStr()}.json`;   // 內含飲食 + 體重
+      // 手機：優先用分享選單，可直接「存到檔案」/ 傳給自己；電腦：直接下載
+      try {
+        const file = new File([json], name, { type: "application/json" });
+        if (window.matchMedia("(pointer:coarse)").matches && navigator.canShare && navigator.canShare({ files: [file] })) {
+          await navigator.share({ files: [file], title: "積木減脂備份" });
+          markBackedUp();
+          showToast("備份已匯出");
+          return;
+        }
+      } catch (err) {
+        if (err && err.name === "AbortError") return;
+      }
+      const blob = new Blob([json], { type: "application/json" });
+      const url = URL.createObjectURL(blob);
+      const a = document.createElement("a");
+      a.href = url;
+      a.download = name;
+      document.body.appendChild(a);
+      a.click();
+      document.body.removeChild(a);
+      setTimeout(() => URL.revokeObjectURL(url), 2000);
+      markBackedUp();
+      showToast("備份已匯出");
+    }
+
+    function importFullBackup(e) {
+      const file = e.target.files[0];
+      if (!file) return;
+      const reader = new FileReader();
+      reader.onload = (ev) => {
+        try {
+          const obj = JSON.parse(ev.target.result);
+          const d = obj && obj.data ? obj.data : obj;
+          const isObj = (x) => x && typeof x === "object" && !Array.isArray(x);
+          if (!d || !Array.isArray(d.foods) || !Array.isArray(d.templates) || !isObj(d.dailyLogs)) {
+            throw new Error("這不是有效的備份檔");
+          }
+          const badFood = d.foods.find(f => !f || typeof f.id !== "string" || typeof f.name !== "string" || !Number.isFinite(f.calPer100) || !Number.isFinite(f.proteinPer100));
+          if (badFood) throw new Error("食材資料格式不正確");
+
+          const days = Object.keys(d.dailyLogs).length;
+          const wCount = d.weight && Array.isArray(d.weight.rec) ? d.weight.rec.length : Object.values(d.dailyLogs).filter(l => l && l.weight > 0).length;
+          const when = obj.exportedAt ? new Date(obj.exportedAt).toLocaleString("zh-TW") : "未知";
+          const msg = `備份檔內容：\n• ${days} 天的飲食紀錄\n• ${wCount} 筆體重紀錄\n• ${d.foods.length} 項食材、${d.templates.length} 個範本\n• 匯出時間：${when}\n\n匯入後會「取代」目前所有資料（之後可用「還原」按鈕復原一次），確定嗎？`;
+          if (!confirm(msg)) return;
+
+          // 先保留整份快照，匯入錯了還能還原
+          try { localStorage.setItem(LS_PREV_ALL, JSON.stringify({ t: Date.now(), raw: localStorage.getItem(LS_DATA) })); } catch (_) {}
+
+          state.profile = Object.assign({}, state.profile, isObj(d.profile) ? d.profile : {});
+          state.foods = d.foods;
+          state.templates = d.templates;
+          state.dailyLogs = d.dailyLogs;
+          WT.replaceAll(d.weight);
+          migrateData(obj.dataVersion || 1);
+          saveState();
+          setCurrentDate(todayStr());
+          WT.fillGoalForm();
+          WT.render();
+          renderLibrary();
+          renderProfile();
+          showToast(`已匯入 ${days} 天的飲食紀錄與 ${state.weight.rec.length} 筆體重紀錄`);
+        } catch (err) {
+          alert("匯入失敗：" + err.message);
+        } finally {
+          e.target.value = "";
+        }
+      };
+      reader.readAsText(file);
+    }
+
+    function updateRestoreButton() {
+      const b = byId("btn-restore-all");
+      if (!b) return;
+      let prev = null;
+      try { prev = JSON.parse(localStorage.getItem(LS_PREV_ALL) || "null"); } catch (_) {}
+      b.classList.toggle("hidden", !(prev && prev.raw));
+      if (prev && prev.raw) b.textContent = "還原到上次匯入前的資料（" + new Date(prev.t).toLocaleString("zh-TW") + "）";
+    }
+
+    function restoreAll() {
+      let prev = null;
+      try { prev = JSON.parse(localStorage.getItem(LS_PREV_ALL) || "null"); } catch (_) {}
+      if (!prev || !prev.raw) return;
+      if (!confirm("要還原到 " + new Date(prev.t).toLocaleString("zh-TW") + " 的資料嗎？\n目前資料會換成可再還原的快照，頁面會重新載入。")) return;
+      try {
+        localStorage.setItem(LS_PREV_ALL, JSON.stringify({ t: Date.now(), raw: localStorage.getItem(LS_DATA) }));
+        localStorage.setItem(LS_DATA, prev.raw);
+        location.reload();
+      } catch (e) { alert("還原失敗：" + e.message); }
+    }
+
+    function renderBackupStatus() {
+      const box = byId("backup-status");
+      if (!box) return;
+      const last = localStorage.getItem(LS_LAST_BACKUP);
+      if (!last) {
+        box.className = "text-xs font-medium text-amber-600";
+        box.innerText = "尚未做過完整備份";
+      } else {
+        const n = daysBetween(last, todayStr());
+        box.className = "text-xs font-medium " + (n >= 7 ? "text-amber-600" : "text-emerald-600");
+        box.innerText = `上次完整備份：${last}（${n <= 0 ? "今天" : n + " 天前"}）`;
+      }
+    }
+
+    // 提醒：同一時間只顯示一則 (備份優先，其次安裝)
+    function renderBackupReminder() {
+      const box = byId("backup-reminder"), ib = byId("install-reminder");
+      if (!box) return;
+      const recordedDays = Object.keys(state.dailyLogs).filter(dayHasRecord).length + state.weight.rec.length;
+      const last = localStorage.getItem(LS_LAST_BACKUP);
+      const snooze = localStorage.getItem(LS_BACKUP_SNOOZE);
+      const today = todayStr();
+      const stale = !last || daysBetween(last, today) >= 7;
+      const showBackup = state.setup.done && recordedDays >= 3 && stale && !(snooze && snooze > today);
+      box.classList.toggle("hidden", !showBackup);
+      const sn = state.setup.installSnooze;
+      const showInstall = !showBackup && state.setup.done && recordedDays >= 2 && !isStandalone() && !state.setup.installDone && !(sn && sn > today);
+      if (ib) ib.classList.toggle("hidden", !showInstall);
+      renderSetupCard();
+    }
+
+    // =====================================================================
+    // 安裝 / 設定進度卡 / 首次引導
+    // =====================================================================
+    let deferredInstall = null;
+    const isStandalone = () => (window.matchMedia && window.matchMedia("(display-mode: standalone)").matches) || navigator.standalone === true;
+    const isIOS = () => /iphone|ipad|ipod/i.test(navigator.userAgent) || (navigator.platform === "MacIntel" && navigator.maxTouchPoints > 1);
+    window.addEventListener("beforeinstallprompt", (e) => { e.preventDefault(); deferredInstall = e; });
+    window.addEventListener("appinstalled", () => { deferredInstall = null; state.setup.installDone = true; saveState(); renderBackupReminder(); });
+
+    function installApp() {
+      if (deferredInstall) {
+        deferredInstall.prompt();
+        deferredInstall.userChoice.then(() => { deferredInstall = null; renderBackupReminder(); });
+        return;
+      }
+      byId("install-help-body").innerHTML = isIOS()
+        ? `<ol class="list-decimal pl-5 space-y-1.5"><li>用 <b>Safari</b> 開啟這個網頁（其他瀏覽器無法加入主畫面）</li><li>點下方的 <b>分享</b> 按鈕（方框加向上箭頭）</li><li>選 <b>加入主畫面</b>，再按「新增」</li></ol><p class="text-[11px] text-slate-500 mt-3 leading-relaxed">為什麼要做：依 Safari 的規則，沒加入主畫面的網站若長時間沒開啟，儲存的資料可能被清掉；加入主畫面後才有離線與較穩定的儲存。</p>`
+        : `<ol class="list-decimal pl-5 space-y-1.5"><li>Chrome / Edge：點網址列右邊的「安裝」圖示，或選單 ⋮ →「安裝應用程式 / 加到主畫面」</li><li>安裝後會像一般 App 一樣開啟，離線也能使用</li></ol>`;
+      byId("modal-install").classList.remove("hidden");
+    }
+    function snoozeInstall() { state.setup.installSnooze = addDays(todayStr(), 14); saveState(); renderBackupReminder(); }
+
+    function setupItems() {
+      const intent = state.setup.intent || "both", pf = state.profile, items = [];
+      const diet = intent !== "weight", wt = intent !== "diet";
+      items.push({ id: "height", label: "填入身高（BMI、TDEE 用）", done: !!pf.heightConfirmed });
+      if (diet) {
+        items.push({ id: "body", label: "填入性別與年齡（估算 TDEE）", done: !!(pf.sex && pf.age) });
+        items.push({ id: "cal", label: "確認每日熱量與蛋白質目標", done: !!(pf.calConfirmed && pf.proteinConfirmed) });
+      }
+      if (wt) {
+        items.push({ id: "wgoal", label: "設定體重目標與計畫", done: !!state.weight.cfg });
+        items.push({ id: "wfirst", label: "記下第一筆體重", done: state.weight.rec.length > 0 });
+      }
+      items.push({ id: "install", label: "加入主畫面（離線、資料較穩）", done: isStandalone() || !!state.setup.installDone });
+      items.push({ id: "backup", label: "做第一次完整備份", done: !!localStorage.getItem(LS_LAST_BACKUP) });
+      return items;
+    }
+
+    function setupCardHtml() {
+      const st = state.setup;
+      if (!st.done || st.cardHidden) return "";
+      const items = setupItems(), done = items.filter(i => i.done).length;
+      if (done === items.length) return "";
+      const next = items.find(i => !i.done), pct = Math.round(done / items.length * 100);
+      return `
+        <div class="bg-white rounded-2xl p-3.5 shadow-sm border border-emerald-200 text-xs">
+          <div class="flex items-center justify-between">
+            <div class="font-bold text-slate-800 text-sm">🚀 完成設定 ${done}/${items.length}</div>
+            <button type="button" onclick="hideSetupCard()" aria-label="先隱藏" class="text-slate-400 px-1 text-base leading-none">×</button>
+          </div>
+          <div class="h-1.5 bg-slate-200 rounded-full mt-2 overflow-hidden"><i class="block h-full bg-emerald-500 rounded-full" style="width:${pct}%"></i></div>
+          <button type="button" onclick="setupGo('${next.id}')" class="w-btn w-full text-xs mt-2.5">下一步：${next.label}</button>
+          <details class="mt-2"><summary class="text-slate-500 cursor-pointer select-none">看全部項目</summary>
+            <ul class="mt-1.5 space-y-0.5">${items.map(i => `<li><button type="button" onclick="setupGo('${i.id}')" class="w-full text-left py-1 ${i.done ? "text-slate-400 line-through" : "text-slate-700"}">${i.done ? "✅" : "⬜"} ${i.label}</button></li>`).join("")}</ul>
+          </details>
+        </div>`;
+    }
+    function renderSetupCard() {
+      const html = setupCardHtml();
+      ["tracker", "weight"].forEach(k => { const el = byId("setup-card-" + k); if (el) el.innerHTML = html; });
+    }
+    function hideSetupCard() { state.setup.cardHidden = true; saveState(); renderSetupCard(); showToast("已隱藏；沒設定完的項目仍會影響 BMI、TDEE 與目標判定"); }
+
+    function setupGo(id) {
+      if (id === "height" || id === "body" || id === "cal") {
+        switchTab("tab-profile");
+        const f = { height: "profile-height", body: state.profile.sex ? "profile-age" : "profile-sex", cal: "profile-cal-target" }[id];
+        setTimeout(() => { const el = byId(f); if (el) { el.scrollIntoView({ block: "center" }); el.focus(); } }, 60);
+      } else if (id === "wgoal") {
+        switchTab("tab-weight");
+        const d = byId("w-sd"); d.open = true; setTimeout(() => d.scrollIntoView({ block: "start" }), 60);
+      } else if (id === "wfirst") WT.openEntry(todayStr());
+      else if (id === "install") installApp();
+      else if (id === "backup") exportFullBackup();
+    }
+
+    // ---- 首次引導：先問意圖，再只問「當下用得到」的最少欄位；每一步都可跳過 ----
+    const OB = (() => {
+      let intent = "", w = 0, plan = null;
+      const body = () => byId("ob-body");
+      const inp = "w-full bg-white border border-slate-300 rounded-xl px-3 py-3 text-base focus:outline-none focus:ring-2 focus:ring-emerald-500";
+      const lbl = "block text-xs font-semibold text-slate-600 mb-1";
+      const dots = (n) => `<div class="flex justify-center gap-1.5 mb-6">${[0, 1, 2, 3, 4].map(i => `<i class="block h-1.5 rounded-full ${i <= n ? "w-6 bg-emerald-500" : "w-3 bg-slate-300"}"></i>`).join("")}</div>`;
+      const head = (emoji, title, sub) => `<div class="text-center space-y-1.5 mb-6"><div class="text-4xl">${emoji}</div><h1 class="text-xl font-bold text-slate-800">${title}</h1>${sub ? `<p class="text-sm text-slate-500 leading-relaxed">${sub}</p>` : ""}</div>`;
+      const skip = (fn) => `<button type="button" onclick="${fn}" class="mt-2 w-full text-xs text-slate-400 underline py-2">跳過這一步，稍後在「設定」完成</button>`;
+      const opt = (key, emoji, title, sub) => `<button type="button" onclick="OB.pick('${key}')" class="w-full text-left bg-white border-2 border-slate-200 hover:border-emerald-500 active:border-emerald-500 rounded-2xl p-4 flex items-center gap-3"><span class="text-3xl">${emoji}</span><span><b class="block text-slate-800">${title}</b><span class="text-xs text-slate-500">${sub}</span></span></button>`;
+
+      function start() { byId("onboarding").classList.remove("hidden"); stepIntent(); }
+
+      function stepIntent() {
+        body().innerHTML = dots(0) + head("👋", "歡迎使用積木減脂", "先選一個你現在最想做的事，其他功能之後可以隨時加。") +
+          `<div class="space-y-3">${opt("diet", "🍽", "記錄飲食", "熱量與蛋白質，用積木方式搭配")}${opt("weight", "⚖️", "記錄體重", "目標、7 日趨勢與教練回饋")}${opt("both", "🔥", "兩個都要", "飲食與體重一起看")}</div>` +
+          `<button type="button" onclick="OB.skipAll()" class="mt-6 w-full text-xs text-slate-400 underline py-2">先隨便看看，稍後再設定</button>`;
+      }
+      function pick(i) { intent = i; stepWeight(); }
+
+      function stepWeight() {
+        const needTarget = intent !== "diet";
+        body().innerHTML = dots(1) + head("⚖️", needTarget ? "目前體重與目標" : "目前體重", needTarget ? "兩個數字就夠。系統先用每週 0.5 公斤的穩健速度排一個計畫，之後都能改。" : "用來估算你每天大約消耗多少熱量。") +
+          `<div class="space-y-4"><div><label class="${lbl}">目前體重 (kg)</label><input id="ob-w0" type="number" step="0.1" inputmode="decimal" class="${inp}" placeholder="例：72.5"></div>` +
+          (needTarget ? `<div><label class="${lbl}">目標體重 (kg)</label><input id="ob-wt" type="number" step="0.1" inputmode="decimal" class="${inp}" placeholder="例：65"></div>` : "") +
+          `<button type="button" onclick="OB.submitWeight()" class="w-btn w-full">下一步</button></div>` + skip("OB.stepBody()");
+      }
+      function submitWeight() {
+        const cur = parseFloat(byId("ob-w0").value);
+        if (!(cur > 20 && cur < 400)) return alert("請輸入正確的目前體重");
+        w = cur;
+        if (intent !== "diet") {
+          const tgt = parseFloat(byId("ob-wt").value);
+          if (!(tgt > 20 && tgt < 400)) return alert("請輸入正確的目標體重");
+          const d0 = todayStr();
+          plan = tgt >= cur
+            ? { mode: "maintain", pm: "weeks", w0: cur, wt: tgt, weeks: 1, cap: 0.5, band: 1, d0, hist: [] }
+            : { mode: "lose", pm: "rate", w0: cur, wt: tgt, weeks: Math.max(1, Math.round((cur - tgt) / 0.5 * 10) / 10), cap: 0.5, band: 1, d0, hist: [] };
+          state.weight.cfg = plan;
+        }
+        // 第一筆體重：馬上就有一筆紀錄 (先有成就感)
+        const d = new Date(), hhmm = String(d.getHours()).padStart(2, "0") + ":" + String(d.getMinutes()).padStart(2, "0");
+        const rec = WT.makeRec(todayStr(), hhmm, cur, "一般", "");
+        if (rec) state.weight.rec.push(rec);
+        saveState();
+        stepBody();
+      }
+
+      function stepBody() {
+        const diet = intent !== "weight";
+        body().innerHTML = dots(2) + head("📏", diet ? "身高、性別、年齡" : "身高（選填）", diet ? "用來估算每日消耗 (TDEE)，再幫你算出建議的熱量目標。" : "填了就能顯示 BMI；不想填可以跳過。") +
+          `<div class="space-y-4"><div><label class="${lbl}">身高 (cm)</label><input id="ob-h" type="number" inputmode="decimal" class="${inp}" placeholder="例：170"></div>` +
+          (diet ? `<div class="grid grid-cols-2 gap-3"><div><label class="${lbl}">性別</label><select id="ob-sex" class="${inp}"><option value="">請選擇</option><option value="male">男</option><option value="female">女</option></select></div><div><label class="${lbl}">年齡</label><input id="ob-age" type="number" inputmode="numeric" class="${inp}"></div></div>
+            <div><label class="${lbl}">日常活動量</label><select id="ob-act" class="${inp}"><option value="1.2">久坐（辦公室、幾乎不運動）</option><option value="1.375" selected>輕度（每週運動 1–3 天）</option><option value="1.55">中度（每週運動 3–5 天）</option><option value="1.725">高度（每週運動 6–7 天或勞力工作）</option></select><p class="text-[11px] text-slate-400 mt-1">不確定時請選低一級，高估是最常見的錯誤。</p></div>` : "") +
+          `<button type="button" onclick="OB.submitBody()" class="w-btn w-full">下一步</button></div>` + skip("OB.afterBody()");
+      }
+      function submitBody() {
+        const h = parseFloat(byId("ob-h").value);
+        if (!isNaN(h)) {
+          if (!(h >= 100 && h <= 230)) return alert("身高請輸入 100–230 之間的數字");
+          state.profile.height = h; state.profile.heightConfirmed = true;
+        }
+        if (intent !== "weight") {
+          const sex = byId("ob-sex").value, age = parseFloat(byId("ob-age").value);
+          if (sex) state.profile.sex = sex;
+          if (age >= 10 && age <= 100) state.profile.age = age;
+          state.profile.activity = parseFloat(byId("ob-act").value) || 1.375;
+        }
+        saveState();
+        afterBody();
+      }
+      function afterBody() { if (intent !== "weight") stepTarget(); else stepDone(); }
+
+      // 「成人每日熱量需求參考表」：沿用設定頁的同一張表，並標出符合你性別的那一列
+      function refTable() {
+        const src = byId("cal-ref-table");
+        if (!src) return "";
+        const tmp = document.createElement("div");
+        tmp.innerHTML = src.innerHTML;
+        const sex = state.profile.sex;
+        tmp.querySelectorAll("tbody tr").forEach(tr => {
+          const label = tr.children[0].textContent;
+          if ((sex === "female" && label.includes("女")) || (sex === "male" && label.includes("男"))) tr.classList.add("bg-emerald-50");
+        });
+        return `<details open class="bg-white rounded-2xl border border-slate-200 p-3 text-xs"><summary class="font-bold text-slate-700 cursor-pointer select-none">📊 成人每日熱量需求參考表 (kcal/天)</summary><p class="text-[11px] text-slate-500 mt-1.5 mb-1.5 leading-relaxed">以中等活動量估算，可依你的實際活動量與目標微調；對照上面的建議，落在附近就合理。</p>${tmp.innerHTML}</details>`;
+      }
+
+      function stepTarget() {
+        const lw = WT.latest(), pf = state.profile;
+        const t = lw && pf.heightConfirmed ? calcBMRTDEE(pf, lw.w) : null;
+        let calV = "", proV = lw ? Math.round(lw.w * 1.8) : "", intro;
+        if (t) {
+          const deficit = plan ? (plan.mode === "lose" ? Math.round(0.5 * 7700 / 7) : 0) : 500;
+          let cal = Math.round((t.tdee - deficit) / 10) * 10, floored = false;
+          if (cal < t.bmr) { cal = Math.round(t.bmr / 10) * 10; floored = true; }
+          calV = cal;
+          intro = `你每天大約消耗 <b>${Math.round(t.tdee)}</b> kcal（TDEE，估算值）。${deficit ? `扣掉每日缺口約 ${deficit} kcal，` : ""}建議每天 <b>${cal}</b> kcal${floored ? "（已不低於基礎代謝）" : ""}、蛋白質 <b>${proV}</b> g（每公斤 1.8 g）。`;
+        } else {
+          intro = "還沒有足夠資料算出你的 TDEE。先對照下面的參考表挑一個大約的數字，之後補齊身高、性別、年齡再微調。";
+        }
+        body().innerHTML = dots(3) + head("🎯", "你的每日目標", intro) +
+          `<div class="space-y-4"><div class="grid grid-cols-2 gap-3"><div><label class="${lbl}">目標熱量 (kcal)</label><input id="ob-cal" type="number" inputmode="numeric" class="${inp}" value="${calV}" placeholder="例：1600"></div><div><label class="${lbl}">目標蛋白質 (g)</label><input id="ob-pro" type="number" inputmode="numeric" class="${inp}" value="${proV}" placeholder="例：100"></div></div>
+          <p class="text-[11px] text-slate-400 leading-relaxed">這是起點，不是定論：先照做 2–3 週，再依體重變化調整。</p>
+          ${refTable()}
+          <button type="button" onclick="OB.submitTarget()" class="w-btn w-full">確認這組目標</button></div>` + skip("OB.stepDone()");
+      }
+      function submitTarget() {
+        const c = parseFloat(byId("ob-cal").value), p = parseFloat(byId("ob-pro").value);
+        if (!(c >= 800 && c <= 6000) || !(p >= 20 && p <= 400)) return alert("請輸入合理的熱量 (800–6000) 與蛋白質 (20–400)");
+        state.profile.calTarget = c; state.profile.proteinTarget = p;
+        state.profile.calConfirmed = true; state.profile.proteinConfirmed = true;
+        saveState();
+        stepDone();
+      }
+
+      function stepDone() {
+        const pf = state.profile, lines = [];
+        if (plan) lines.push(plan.mode === "lose" ? `⚖️ 體重計畫：${plan.w0} → ${plan.wt} kg，每週 0.5 kg，預計 ${addDays(todayStr(), Math.round(plan.weeks * 7))} 達標` : `⚖️ 維持在 ${plan.wt} kg 附近`);
+        if (state.weight.rec.length) lines.push("✅ 第一筆體重已記下");
+        if (pf.calConfirmed) lines.push(`🎯 每日 ${pf.calTarget} kcal / 蛋白質 ${pf.proteinTarget} g`);
+        const todo = intent === "weight" ? "之後每天早晚各量一次，記在「體重」分頁；7 天後就會有趨勢判定。" : "到「今日飲食」記下第一餐——可以先套用「超商」範本，或直接挑一個食物。";
+        body().innerHTML = dots(4) + head("🎉", "設定完成", "") +
+          `<div class="bg-white rounded-2xl border border-slate-200 p-4 space-y-1.5 text-sm text-slate-700">${lines.map(l => `<div>${l}</div>`).join("") || '<div class="text-slate-400">之後可以在畫面上的「完成設定」卡補齊。</div>'}</div>
+          <p class="text-sm text-slate-600 mt-4 leading-relaxed">下一步：${todo}</p>
+          ${isStandalone() ? "" : `<button type="button" onclick="installApp()" class="mt-4 w-full bg-emerald-50 border border-emerald-200 text-emerald-800 rounded-xl py-2.5 text-xs font-medium">📲 建議先加入主畫面（離線、資料較穩）——看教學</button>`}
+          <p class="text-[11px] text-slate-400 mt-4 leading-relaxed">資料只存在這個瀏覽器，不會自動同步；清除網站資料或換手機會遺失，請定期到「設定」匯出完整備份。</p>
+          <button type="button" onclick="OB.finish()" class="w-btn w-full mt-4">開始使用</button>`;
+      }
+
+      function finish() {
+        state.setup.done = true; state.setup.intent = intent; state.weight.intro = 1;
+        saveState();
+        byId("onboarding").classList.add("hidden");
+        WT.fillGoalForm(); WT.render(); renderTracker(); renderProfile();
+        switchTab(intent === "weight" ? "tab-weight" : "tab-tracker");
+      }
+      function skipAll() {
+        state.setup.done = true;
+        saveState();
+        byId("onboarding").classList.add("hidden");
+        byId("modal-intro").classList.remove("hidden");   // 仍要讓使用者看到「資料只存在本機」
+        renderTracker(); renderProfile();
+      }
+      return { start, pick, submitWeight, stepBody, submitBody, afterBody, submitTarget, stepDone, finish, skipAll };
+    })();
+
+    window.addEventListener("DOMContentLoaded", init);
+  </script>
+</body>
+</html>
