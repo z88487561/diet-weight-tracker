@@ -1,6 +1,6 @@
 # 積木減脂：飲食 × 體重
 
-開始使用：
+開始使用：https://z88487561.github.io/diet-weight-tracker/
 
 ## 分頁
 | 分頁 | 內容 |
