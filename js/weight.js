@@ -14,6 +14,9 @@ const WT = (() => {
   const MIGRATED_NOTE = "飲食版每日體重";                    // 由舊版飲食記錄的「每日體重」轉入的紀錄
   const r1 = (x) => Math.round(x * 10) / 10;
   const f1 = (x) => (x == null || isNaN(x)) ? "–" : (Math.round(x * 10) / 10).toFixed(1);
+  const r2 = (x) => Math.round(x * 100) / 100;
+  // 體重一律顯示到小數點後兩位 (例：71.25)
+  const fw = (x) => (x == null || isNaN(x)) ? "–" : (Math.round(x * 100) / 100).toFixed(2);
   const esc = (x) => String(x == null ? "" : x).replace(/[&<>"']/g, c => ({ "&": "&amp;", "<": "&lt;", ">": "&gt;", '"': "&quot;", "'": "&#39;" }[c]));
   const ymd = (d) => d.getFullYear() + "-" + pad(d.getMonth() + 1) + "-" + pad(d.getDate());
   const today = () => ymd(new Date());
@@ -88,7 +91,7 @@ const WT = (() => {
   const planAt = (d) => { const c = S.cfg; for (const h of c.hist || []) if (d < h.until) return h; return c; };
   const dd = () => { const c = S.cfg; return (c.w0 - c.wt) / (c.weeks * 7); };
   const endD = () => add(S.cfg.d0, Math.round(S.cfg.weeks * 7));
-  const tg = (d) => { const c = planAt(d); return c.mode === "maintain" ? c.wt : r1(Math.min(c.w0, Math.max(c.wt, c.w0 - (c.w0 - c.wt) / (c.weeks * 7) * (dn(d) - dn(c.d0))))); };
+  const tg = (d) => { const c = planAt(d); return c.mode === "maintain" ? c.wt : r2(Math.min(c.w0, Math.max(c.wt, c.w0 - (c.w0 - c.wt) / (c.weeks * 7) * (dn(d) - dn(c.d0))))); };
   // 沒有設定目標時回傳 null (不判定)
   const ok = (e) => { const c = S.cfg; if (!c) return null; const p = planAt(e.d); return p.mode === "maintain" ? Math.abs(e.w - p.wt) <= p.band + 1e-9 : e.w <= tg(e.d) + 1e-6; };
   const sorted = () => [...S.rec].sort((a, b) => (a.d + a.t).localeCompare(b.d + b.t));
@@ -208,7 +211,7 @@ const WT = (() => {
   }
 
   function saveRecord() {
-    const w = parseFloat($("#w-fw").value), t = $("#w-ft").value;
+    const w = Math.round(parseFloat($("#w-fw").value) * 100) / 100, t = $("#w-ft").value;
     if (!(w > 20 && w < 400) || !t) return toast("請輸入正確的時間與體重", "#b45309");
     if (Date.parse(t) > Date.now() + 36e5) return toast("不能記錄未來的時間", "#b45309");
     const e = { id: editId || nid(), d: t.slice(0, 10), t: t.slice(11), w, g: $("#w-fg").value, n: $("#w-fn").value };
@@ -222,23 +225,23 @@ const WT = (() => {
     const c = S.cfg;
     let msg, col;
     if (!c) {
-      msg = `已記錄 ${f1(w)} kg。設定目標後，這裡會顯示趨勢判定與教練回饋。`; col = "#2563eb";
+      msg = `已記錄 ${fw(w)} kg。設定目標後，這裡會顯示趨勢判定與教練回饋。`; col = "#2563eb";
     } else {
       const sta = statusAt(e.d), gr = grade(e), pl = planAt(e.d), dpl = (pl.w0 - pl.wt) / (pl.weeks * 7);
-      if (!sta) { msg = `已記錄 ${f1(w)} kg。再多記幾天，就能看到 7 日趨勢與判定。`; col = "#2563eb"; }
+      if (!sta) { msg = `已記錄 ${fw(w)} kg。再多記幾天，就能看到 7 日趨勢與判定。`; col = "#2563eb"; }
       else if (sta.maintain) {
-        if (sta.st === "on") { msg = `維持得很好：趨勢 ${f1(sta.trend)} kg 在區間內 ✅`; col = "#16a34a"; }
-        else { msg = `趨勢 ${f1(sta.trend)} kg 已離開維持區間（${f1(sta.target - sta.band)}~${f1(sta.target + sta.band)}），先把體重帶回區間再放鬆。`; col = sta.st === "far" ? "#dc2626" : "#d97706"; }
+        if (sta.st === "on") { msg = `維持得很好：趨勢 ${fw(sta.trend)} kg 在區間內 ✅`; col = "#16a34a"; }
+        else { msg = `趨勢 ${fw(sta.trend)} kg 已離開維持區間（${fw(sta.target - sta.band)}~${fw(sta.target + sta.band)}），先把體重帶回區間再放鬆。`; col = sta.st === "far" ? "#dc2626" : "#d97706"; }
       } else if (sta.st === "ahead") {
         const lead = dpl > 0 ? -sta.gap / dpl : 0;
         msg = lead >= 14 ? pick("lead", ML) : pick("ok", MO); col = "#16a34a";
         if (gr !== "g") msg += "(今天這筆偏高屬自然波動，看趨勢就好)";
       } else if (sta.st === "on") {
-        msg = `趨勢貼著目標線（差 ${f1(Math.max(0, sta.gap))} kg）。單日偏高不必緊張，但這是邊緣，別放鬆。`; col = "#65a30d";
+        msg = `趨勢貼著目標線（差 ${fw(Math.max(0, sta.gap))} kg）。單日偏高不必緊張，但這是邊緣，別放鬆。`; col = "#65a30d";
       } else if (sta.st === "behind") {
-        msg = `趨勢落後 ${f1(sta.gap)} kg（約 ${Math.round(sta.days)} 天進度）。接下來 7 天把每日熱量守在目標內，進度追得回來。`; col = "#d97706";
+        msg = `趨勢落後 ${fw(sta.gap)} kg（約 ${Math.round(sta.days)} 天進度）。接下來 7 天把每日熱量守在目標內，進度追得回來。`; col = "#d97706";
       } else {
-        msg = `⚠️ 趨勢落後 ${f1(sta.gap)} kg（約 ${Math.round(sta.days)} 天進度），已明顯偏離計畫。看上方「可行性」，必要時重新規劃。`; col = "#dc2626";
+        msg = `⚠️ 趨勢落後 ${fw(sta.gap)} kg（約 ${Math.round(sta.days)} 天進度），已明顯偏離計畫。看上方「可行性」，必要時重新規劃。`; col = "#dc2626";
       }
     }
     if (prev && prev.w - e.w > 1.5 && (Date.parse(e.d + "T" + e.t) - Date.parse(prev.d + "T" + prev.t)) < 864e5 * 1.5) {
@@ -250,7 +253,7 @@ const WT = (() => {
     if (typeof updateStorageNote === "function") updateStorageNote(true);
     toast(msg, col, 6000);
     // 還沒設目標時，把剛記的體重帶入「起始體重」欄位 (不覆蓋使用者已輸入的內容)
-    if (!S.cfg && !$("#w-w0").value) $("#w-w0").value = f1(e.w);
+    if (!S.cfg && !$("#w-w0").value) $("#w-w0").value = String(r2(e.w));
     resetForm();
     render();
     refreshOthers();
@@ -304,7 +307,7 @@ const WT = (() => {
 
   function stChip(sta) {
     if (!sta) return "";
-    const txt = sta.maintain ? (sta.st === "on" ? "區間內" : "離開區間") : (sta.st === "ahead" ? (-sta.gap < 0.05 ? "貼近目標線" : "領先 " + f1(-sta.gap)) : ST_LABEL[sta.st] + " " + f1(sta.gap));
+    const txt = sta.maintain ? (sta.st === "on" ? "區間內" : "離開區間") : (sta.st === "ahead" ? (-sta.gap < 0.05 ? "貼近目標線" : "領先 " + fw(-sta.gap)) : ST_LABEL[sta.st] + " " + fw(sta.gap));
     return `<div><span class="inline-block mt-0.5 px-2 py-0.5 rounded-full text-[11px] text-white" style="background:${ST_COLOR[sta.st]}">${txt}</span></div>`;
   }
 
@@ -316,7 +319,7 @@ const WT = (() => {
 
     if (!c) {
       const tr = trendAt(today()) ?? (last ? last.w : null);
-      kp.innerHTML = cell("目前", last ? f1(last.w) + " kg" : "–") + cell("7日趨勢", tr != null ? f1(tr) + " kg" : "–") + bmiCell(last ? last.w : 0);
+      kp.innerHTML = cell("目前", last ? fw(last.w) + " kg" : "–") + cell("7日趨勢", tr != null ? fw(tr) + " kg" : "–") + bmiCell(last ? last.w : 0);
       $("#w-pb").style.width = "0%";
       fc = '<span class="text-slate-500">尚未設定目標。展開上方「體重目標與計畫」設定後，會顯示每日目標、趨勢判定與進度。</span>';
       if (!autoOpened) { $("#w-sd").open = true; autoOpened = true; }
@@ -324,9 +327,9 @@ const WT = (() => {
       const sta = statusAt(today()), cur = last ? last.w : c.w0, trend = sta ? sta.trend : cur, t = tg(today());
       const pr = c.w0 === c.wt ? 100 : Math.max(0, Math.min(100, (c.w0 - trend) / (c.w0 - c.wt) * 100));
       kp.innerHTML = [
-        ["目前", f1(cur) + " kg"],
-        ["7日趨勢", f1(trend) + " kg", stChip(sta)],
-        ["今日目標", c.mode === "maintain" ? f1(c.wt - c.band) + "~" + f1(c.wt + c.band) : f1(t) + " kg"],
+        ["目前", fw(cur) + " kg"],
+        ["7日趨勢", fw(trend) + " kg", stChip(sta)],
+        ["今日目標", c.mode === "maintain" ? fw(c.wt - c.band) + "~" + fw(c.wt + c.band) : fw(t) + " kg"],
         ["進度", f1(pr) + "%"],
         ["每日減量", c.mode === "maintain" ? "維持" : f1(weeklyPlanPace() / 7 * 1000) + " g"]
       ].map(a => cell(a[0], a[1], a[2])).join("") + bmiCell(cur);
@@ -342,17 +345,17 @@ const WT = (() => {
         } else {
           // ① 狀態：我在哪
           if (sta) {
-            const lab = sta.st === "ahead" ? `<b style="color:${ST_COLOR.ahead}">領先 ${f1(-sta.gap)} kg</b>（約 ${Math.round(-sta.days)} 天進度）`
-              : sta.st === "on" ? `<b style="color:${ST_COLOR.on}">貼近目標線</b>（差 ${f1(Math.max(0, sta.gap))} kg，在自然波動內）`
-              : `<b style="color:${ST_COLOR[sta.st]}">${ST_LABEL[sta.st]} ${f1(sta.gap)} kg</b>（約 ${Math.round(sta.days)} 天進度）`;
-            parts.push(`<div>① 狀態：${lab} · 趨勢 ${f1(sta.trend)} vs 目標線 ${f1(sta.target)}</div>`);
+            const lab = sta.st === "ahead" ? `<b style="color:${ST_COLOR.ahead}">領先 ${fw(-sta.gap)} kg</b>（約 ${Math.round(-sta.days)} 天進度）`
+              : sta.st === "on" ? `<b style="color:${ST_COLOR.on}">貼近目標線</b>（差 ${fw(Math.max(0, sta.gap))} kg，在自然波動內）`
+              : `<b style="color:${ST_COLOR[sta.st]}">${ST_LABEL[sta.st]} ${fw(sta.gap)} kg</b>（約 ${Math.round(sta.days)} 天進度）`;
+            parts.push(`<div>① 狀態：${lab} · 趨勢 ${fw(sta.trend)} vs 目標線 ${fw(sta.target)}</div>`);
           } else parts.push('<div class="text-slate-500">① 狀態：最近 7 天沒有紀錄，先記一筆吧。</div>');
 
           // ② 可行性：原定日期還來不來得及 (只看剩餘公斤與剩餘時間，不受近期雜訊影響)
           let needReplan = false;
           if (left <= 0) {
             suggestWeeks = Math.max(1, Math.ceil(remain / c.cap));
-            parts.push(`<div class="text-red-600 font-medium">② 可行性：已超過原定日期 ${-left} 天，距目標還有 ${f1(remain)} kg；以安全速度（${c.cap} kg/週）約需 ${suggestWeeks} 週。</div>`);
+            parts.push(`<div class="text-red-600 font-medium">② 可行性：已超過原定日期 ${-left} 天，距目標還有 ${fw(remain)} kg；以安全速度（${c.cap} kg/週）約需 ${suggestWeeks} 週。</div>`);
             needReplan = true;
           } else {
             const needWk = remain / (left / 7);
@@ -397,8 +400,8 @@ const WT = (() => {
           }
         }
       } else {
-        const sm = sta ? (sta.st === "on" ? `<span class="text-emerald-600">趨勢 ${f1(sta.trend)} kg 在區間內 ✅</span>` : `<span class="text-amber-700 font-medium">趨勢 ${f1(sta.trend)} kg 已離開區間，請留意</span>`) : "";
-        parts.push(`<div>維持區間 ${f1(c.wt - c.band)}~${f1(c.wt + c.band)} kg · ${sm}</div>`);
+        const sm = sta ? (sta.st === "on" ? `<span class="text-emerald-600">趨勢 ${fw(sta.trend)} kg 在區間內 ✅</span>` : `<span class="text-amber-700 font-medium">趨勢 ${fw(sta.trend)} kg 已離開區間，請留意</span>`) : "";
+        parts.push(`<div>維持區間 ${fw(c.wt - c.band)}~${fw(c.wt + c.band)} kg · ${sm}</div>`);
       }
       fc = parts.join('<div class="h-1.5"></div>');
     }
@@ -410,7 +413,7 @@ const WT = (() => {
 
   function renderCoach() {
     const c = S.cfg, e = $("#w-co");
-    const t = c ? (c.mode === "maintain" ? "維持區間 " + f1(c.wt - c.band) + "~" + f1(c.wt + c.band) + " kg" : "今日理想目標 " + f1(tg(today())) + " kg") : "尚未設定目標";
+    const t = c ? (c.mode === "maintain" ? "維持區間 " + fw(c.wt - c.band) + "~" + fw(c.wt + c.band) + " kg" : "今日理想目標 " + fw(tg(today())) + " kg") : "尚未設定目標";
     const k = S.coach || { m: "歡迎!設定好目標後，每天早晚各記錄一次，這裡會顯示最近一次的回饋與建議。", c: "#2563eb" };
     e.style.borderLeft = "5px solid " + k.c;
     e.innerHTML = '<div class="text-xs text-slate-500">🧭 教練回饋 · ' + t + '</div><div class="mt-1 text-sm leading-relaxed">' + esc(k.m) + "</div>";
@@ -433,9 +436,9 @@ const WT = (() => {
       return `
         <div class="py-2.5 border-b border-slate-100 grid grid-cols-[1fr_auto] gap-x-3 gap-y-0.5 items-baseline">
           <div class="font-semibold text-slate-800 text-sm">${e.d.slice(5)} ${e.t}</div>
-          <div class="text-right text-lg font-bold text-slate-800">${f1(e.w)}</div>
-          <div class="text-xs text-slate-500">${esc(e.g || "")}${c ? " · 今日目標 " + f1(t) : ""}</div>
-          <div class="text-right text-sm font-semibold ${col}">${isNaN(df) ? "–" : (df > 0 ? "+" : "") + f1(df)}</div>
+          <div class="text-right text-lg font-bold text-slate-800">${fw(e.w)}</div>
+          <div class="text-xs text-slate-500">${esc(e.g || "")}${c ? " · 今日目標 " + fw(t) : ""}</div>
+          <div class="text-right text-sm font-semibold ${col}">${isNaN(df) ? "–" : (df > 0 ? "+" : "") + fw(df)}</div>
           ${e.n ? `<div class="col-span-2 text-xs text-slate-600">${esc(e.n)}</div>` : ""}
           <div class="col-span-2 flex gap-5 text-xs">
             <button data-e="${e.id}" class="text-emerald-700 font-medium py-1.5">編輯</button>
@@ -458,7 +461,7 @@ const WT = (() => {
     if (!c && !l.length) { svg.innerHTML = ""; return; }
 
     const d0s = c ? c.d0 : l[0].d;
-    const W = Math.max(300, Math.round(svg.parentNode.clientWidth) || 640), H = W < 500 ? 250 : 300, L = 36, Rm = 8, T = 10, B = 24;
+    const W = Math.max(300, Math.round(svg.parentNode.clientWidth) || 640), H = W < 500 ? 250 : 300, L = 44, Rm = 8, T = 10, B = 24;
     const px = dn(d0s), endP = c ? px + Math.round(c.weeks * 7) : px, lastD = l.length ? dn(l[l.length - 1].d) + 1 : 0, mt = !!c && c.mode === "maintain";
     let x0, x1;
     if (R === "all") { x0 = px; x1 = Math.max(endP, lastD, px + 7); } else { x1 = Math.max(dn(today()) + 1, lastD); x0 = x1 - (+R); }
@@ -481,7 +484,7 @@ const WT = (() => {
     let o = "";
     for (let i = 0; i <= 4; i++) {
       const v = mn + (mx - mn) * i / 4;
-      o += `<line x1="${L}" x2="${W - Rm}" y1="${Y(v)}" y2="${Y(v)}" class="c-grid"/><text x="${L - 4}" y="${Y(v) + 4}" font-size="11" text-anchor="end" class="c-mu">${f1(v)}</text>`;
+      o += `<line x1="${L}" x2="${W - Rm}" y1="${Y(v)}" y2="${Y(v)}" class="c-grid"/><text x="${L - 4}" y="${Y(v) + 4}" font-size="11" text-anchor="end" class="c-mu">${fw(v)}</text>`;
     }
     const step = Math.ceil((x1 - x0) / (W < 500 ? 5 : 8));
     for (let d = x0; d <= x1; d += step) {
@@ -496,7 +499,7 @@ const WT = (() => {
     if (ma.length > 1) o += `<polyline points="${ma.map(p => X(p[0]) + "," + Y(p[1])).join(" ")}" fill="none" stroke="#f59e0b" stroke-width="3"/>`;
     vis.forEach(e => {
       const gr = grade(e), col = gr === null ? "#9ca3af" : GRADE_COLOR[gr];
-      o += `<circle cx="${X(xs(e))}" cy="${Y(e.w)}" r="${R === "all" && x1 - x0 > 120 ? 3 : (W < 500 ? 5.5 : 4.5)}" fill="${col}" class="c-dot" stroke-width="1.5"><title>${esc(e.d + " " + e.t + " " + (e.g || ""))} ${f1(e.w)}kg</title></circle>`;
+      o += `<circle cx="${X(xs(e))}" cy="${Y(e.w)}" r="${R === "all" && x1 - x0 > 120 ? 3 : (W < 500 ? 5.5 : 4.5)}" fill="${col}" class="c-dot" stroke-width="1.5"><title>${esc(e.d + " " + e.t + " " + (e.g || ""))} ${fw(e.w)}kg</title></circle>`;
     });
     svg.setAttribute("viewBox", "0 0 " + W + " " + H);
     svg.innerHTML = o;
@@ -528,7 +531,7 @@ const WT = (() => {
 
   function warns(c, rate) {
     const w = [], h = state.profile.height, bmi = hOk() ? c.wt / ((h / 100) ** 2) : 99;
-    if (rate > c.cap + 1e-9) w.push("每週需減 " + f1(rate) + " kg，超過安全上限 " + c.cap + " kg/週");
+    if (rate > c.cap + 1e-9) w.push("每週需減 " + fw(rate) + " kg，超過安全上限 " + c.cap + " kg/週");
     if (rate > c.w0 * .01) w.push("超過每週體重 1%");
     if (bmi < 18.5) w.push("目標體重 BMI " + f1(bmi) + " 低於 18.5");
     return w;
@@ -543,12 +546,12 @@ const WT = (() => {
     $("#w-lw").textContent = mt ? "要維持的體重 kg" : "目標體重 kg";
     const b = +$("#w-bn").value || 1, t = +$("#w-wt").value;
     $("#w-mh").innerHTML = mt
-      ? "維持模式:達標後用來守住體重。以「目標體重」為中心，落在 ± 區間內的紀錄都算達成" + (t > 20 ? "(目前設定:<b>" + f1(t - b) + " ~ " + f1(t + b) + " kg</b>)" : "(例如目標 65、區間 ±1 → 64~66 kg 算達成)") + "；高於上限會提醒，低於下限也不算達成，避免瘦過頭。圖上以綠色帶狀區間顯示。此模式不需要設定期間或每週速率。"
+      ? "維持模式:達標後用來守住體重。以「目標體重」為中心，落在 ± 區間內的紀錄都算達成" + (t > 20 ? "(目前設定:<b>" + fw(t - b) + " ~ " + fw(t + b) + " kg</b>)" : "(例如目標 65、區間 ±1 → 64~66 kg 算達成)") + "；高於上限會提醒，低於下限也不算達成，避免瘦過頭。圖上以綠色帶狀區間顯示。此模式不需要設定期間或每週速率。"
       : "減重模式:依起始體重、目標體重與期間，算出一條逐日下降的目標線，每次紀錄 ≤ 當天目標就算達成。達標後，這頁會出現按鈕讓你切換到維持模式。";
     const c = readGoalForm(), el = $("#w-cs");
     if (c.mode !== "lose" || !(c.w0 > 20 && c.wt > 20 && c.wt < c.w0 && c.weeks > 0)) { el.innerHTML = ""; return; }
     const rate = (c.w0 - c.wt) / c.weeks, w = warns(c, rate);
-    el.innerHTML = "試算:共 <b>" + f1(c.weeks) + "</b> 週(" + Math.round(c.weeks * 7) + " 天)，每週 <b>" + f1(rate) + " kg</b>，每日約 <b>" + f1(rate / 7 * 1000) + " g</b>，預計 <b>" + add(c.d0, Math.round(c.weeks * 7)) + "</b> 達標" + (w.length ? '<div class="text-amber-700 mt-1">⚠️ ' + w.join(";") + "</div>" : "");
+    el.innerHTML = "試算:共 <b>" + f1(c.weeks) + "</b> 週(" + Math.round(c.weeks * 7) + " 天)，每週 <b>" + fw(rate) + " kg</b>，每日約 <b>" + f1(rate / 7 * 1000) + " g</b>，預計 <b>" + add(c.d0, Math.round(c.weeks * 7)) + "</b> 達標" + (w.length ? '<div class="text-amber-700 mt-1">⚠️ ' + w.join(";") + "</div>" : "");
   }
 
   function saveGoal() {
@@ -572,9 +575,9 @@ const WT = (() => {
     if (!l.length) return;
     const sta = statusAt(today()), start = sta ? sta.trend : l[l.length - 1].w;
     const minW = Math.max(1, Math.ceil((start - c.wt) / c.cap));
-    const v = prompt("重新規劃：從趨勢體重 " + f1(start) + " kg 起算，預計幾週達標?\n(依安全上限建議至少 " + minW + " 週)", sug || minW);
+    const v = prompt("重新規劃：從趨勢體重 " + fw(start) + " kg 起算，預計幾週達標?\n(依安全上限建議至少 " + minW + " 週)", sug || minW);
     if (!v || !(+v > 0)) return;
-    S.cfg = { ...c, hist: pushHist(c), w0: r1(start), d0: today(), weeks: +v, pm: "weeks" };
+    S.cfg = { ...c, hist: pushHist(c), w0: r2(start), d0: today(), weeks: +v, pm: "weeks" };
     sv(); fillGoalForm(); render(); refreshOthers();
     toast("已重新規劃目標", "#16a34a");
   }
@@ -784,12 +787,12 @@ const WT = (() => {
   // 對外介面 (給飲食頁、趨勢、設定使用)
   // ---------------------------------------------------------------------
   function latest() { const l = sorted(), e = l[l.length - 1]; return e ? { w: e.w, date: e.d } : null; }
-  function dayMean(ds) { const a = days()[ds]; return a ? r1(a.reduce((s, e) => s + e.w, 0) / a.length) : null; }
+  function dayMean(ds) { const a = dayStat()[ds]; return a ? r2(a.mean) : null; }
   function dayInfo(ds) {
     const a = days()[ds];
     if (!a) return null;
     const mean = a.reduce((s, e) => s + e.w, 0) / a.length;
-    return { mean: r1(mean), n: a.length, last: a[a.length - 1], grade: grade(a[a.length - 1]), status: statusAt(ds) };
+    return { mean: r2(mean), n: a.length, last: a[a.length - 1], grade: grade(a[a.length - 1]), status: statusAt(ds) };
   }
   // 近 4 週實測速度 (kg/週，負數表示下降)；資料不足回傳 null
   function slopePerWeek() { const p = pace(); return p ? -p.recentWk : null; }
@@ -799,6 +802,21 @@ const WT = (() => {
     if (!c || c.mode !== "lose" || !(c.weeks > 0) || !(c.w0 > c.wt)) return null;
     const perWeek = (c.w0 - c.wt) / c.weeks;
     return { perWeek, perDay: perWeek * 7700 / 7 };
+  }
+
+  // 合併體重紀錄 (完整 CSV 合併匯入用)：以「日期+時間」判斷重複，只補缺少的；dry=true 只試算不寫入
+  function merge(p, dry) {
+    const key = (e) => e.d + " " + e.t, have = new Map(S.rec.map(e => [key(e), e])), nw = [];
+    let dup = 0, diff = 0;
+    ((p && p.rec) || []).forEach(e => { const k = key(e), o = have.get(k); if (o) { dup++; if (o.w !== e.w) diff++; } else { have.set(k, e); nw.push(e); } });
+    const cfgAdopt = !!(p && p.cfg && !S.cfg);
+    if (!dry) {
+      snap();
+      S.rec = S.rec.concat(nw);
+      if (cfgAdopt) S.cfg = p.cfg;
+      award(); sv();
+    }
+    return { add: nw.length, dup, diff, cfgAdopt };
   }
 
   function openEntry(ds) {
@@ -841,5 +859,5 @@ const WT = (() => {
     if (!S.intro && !(state.setup && !state.setup.done)) show("modal-intro", true);
   }
 
-  return { init, normalize, replaceAll, render, makeRec, latest, dayMean, dayInfo, slopePerWeek, planDeficit, openEntry, fillGoalForm, MIGRATED_NOTE, TAGS };
+  return { init, normalize, replaceAll, merge, render, makeRec, latest, dayMean, dayInfo, slopePerWeek, planDeficit, openEntry, fillGoalForm, MIGRATED_NOTE, TAGS };
 })();
