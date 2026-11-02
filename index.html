@@ -5,7 +5,7 @@
   <meta name="viewport" content="width=device-width, initial-scale=1.0, viewport-fit=cover">
   <title>積木減脂：飲食與體重</title>
   <!-- PWA Meta -->
-  <meta name="theme-color" content="#059669">
+  <meta name="theme-color" content="#107d75">
   <meta name="description" content="積木式減脂飲食記錄 + 體重目標追蹤，整合在同一個 PWA">
   <link rel="manifest" href="manifest.webmanifest">
   <link rel="icon" type="image/png" href="icons/icon-192.png">
@@ -42,18 +42,55 @@
     details > summary::-webkit-details-marker { display: none; }
     details > summary::after { content: "▾"; float: right; color: #94a3b8; }
     details[open] > summary::after { content: "▴"; }
+
+    /* 標題列：與 App 圖示同色的青綠色 */
+    .app-header { background: #107d75; }
+    .app-header-badge { background: #0b5f59; color: #d5efec; }
+    /* 左右滑動換頁的轉場 */
+    main { overflow-x: clip; }
+    @keyframes tabInFromRight { from { opacity: 0; transform: translateX(28px); } to { opacity: 1; transform: none; } }
+    @keyframes tabInFromLeft { from { opacity: 0; transform: translateX(-28px); } to { opacity: 1; transform: none; } }
+    .tab-in-right { animation: tabInFromRight .22s ease-out; }
+    .tab-in-left { animation: tabInFromLeft .22s ease-out; }
+    @media (prefers-reduced-motion: reduce) { .tab-in-right, .tab-in-left { animation: none; } }
+    /* 每餐「完成 / 編輯」按鈕與鎖定後的精簡顯示 */
+    .btn-meal-done { background: #107d75; color: #fff; border: 1px solid #107d75; border-radius: .5rem; padding: .25rem .75rem; font-size: .75rem; font-weight: 700; line-height: 1.25rem; }
+    .btn-meal-done:active { background: #0b5f59; }
+    .btn-meal-done-wide { display: block; width: 100%; border-radius: .75rem; padding: .6rem 1rem; font-size: .875rem; }
+    .btn-meal-edit { background: #fff; color: #107d75; border: 1px solid #107d75; border-radius: .5rem; padding: .25rem .75rem; font-size: .75rem; font-weight: 700; line-height: 1.25rem; }
+    .btn-meal-edit:active { background: #e6f4f2; }
+    html.dark .btn-meal-edit { background: transparent; color: #5eead4; border-color: #2dd4bf; }
+    html.dark .btn-meal-edit:active { background: rgba(45, 212, 191, .12); }
+    .meal-done-badge { display: inline-block; margin-left: .35rem; padding: 0 .4rem; border-radius: 9999px; background: #e6f4f2; color: #107d75; font-size: 10px; font-weight: 700; line-height: 1.1rem; vertical-align: middle; }
+    html.dark .meal-done-badge { background: rgba(45, 212, 191, .15); color: #5eead4; }
+    .mrow { display: flex; align-items: center; gap: .5rem; padding: .4rem .6rem; border-radius: .5rem; background: #f8fafc; border: 1px solid #e2e8f0; font-size: .75rem; }
+    html.dark .mrow { background: #0f172a; border-color: #334155; }
+    .mrow-name { flex: 1 1 auto; min-width: 0; overflow: hidden; text-overflow: ellipsis; white-space: nowrap; color: #334155; }
+    html.dark .mrow-name { color: #e2e8f0; }
+    .mrow-amt { flex-shrink: 0; color: #64748b; font-size: 11px; }
+    html.dark .mrow-amt { color: #94a3b8; }
+    .mrow-cat { font-size: 11px; font-weight: 600; color: #64748b; }
+    html.dark .mrow-cat { color: #94a3b8; }
+    .meal-empty { text-align: center; color: #94a3b8; font-size: .75rem; padding: .5rem 0; }
+    /* 趨勢頁區間按鈕 */
+    .rng-btn { padding: .25rem .75rem; border-radius: .5rem; font-size: .75rem; font-weight: 500; background: #f1f5f9; color: #475569; }
+    .rng-btn.on { background: #107d75; color: #fff; }
+    html.dark .rng-btn { background: #1e293b; color: #cbd5e1; }
+    html.dark .rng-btn.on { background: #107d75; color: #fff; }
+    .trend-need { background: #f8fafc; border: 1px solid #e2e8f0; color: #475569; }
+    html.dark .trend-need { background: #0f172a; border-color: #334155; color: #cbd5e1; }
   </style>
 </head>
 <body class="min-h-full text-slate-800 flex flex-col pb-28">
 
   <!-- Header -->
-  <header class="bg-emerald-600 text-white sticky top-0 z-30 shadow-md">
+  <header class="app-header text-white sticky top-0 z-30 shadow-md">
     <div class="max-w-2xl mx-auto px-4 py-3 flex items-center justify-between">
       <div class="flex items-center gap-2">
         <i data-lucide="utensils-crossed" class="w-6 h-6"></i>
         <h1 class="text-lg font-bold tracking-wide">積木減脂</h1>
       </div>
-      <span class="text-xs bg-emerald-700 text-emerald-100 px-2 py-1 rounded-full font-medium">飲食 × 體重</span>
+      <span class="app-header-badge text-xs px-2 py-1 rounded-full font-medium">飲食 × 體重</span>
     </div>
   </header>
 
@@ -170,8 +207,8 @@
             <div id="w-mh" class="text-[11px] text-slate-500 leading-relaxed mt-1.5"></div>
           </div>
           <div class="grid grid-cols-2 gap-3">
-            <div><label class="w-lbl">目前 / 起始體重 kg</label><input type="number" step="0.1" id="w-w0" inputmode="decimal" class="w-inp"></div>
-            <div><label id="w-lw" class="w-lbl">目標體重 kg</label><input type="number" step="0.1" id="w-wt" inputmode="decimal" class="w-inp"></div>
+            <div><label class="w-lbl">目前 / 起始體重 kg</label><input type="number" step="0.01" id="w-w0" inputmode="decimal" class="w-inp"></div>
+            <div><label id="w-lw" class="w-lbl">目標體重 kg</label><input type="number" step="0.01" id="w-wt" inputmode="decimal" class="w-inp"></div>
             <div id="w-gp"><label class="w-lbl">計畫方式</label>
               <select id="w-pm" class="w-inp"><option value="rate">設定每週速率，自動算期間</option><option value="weeks">指定總週數</option></select></div>
             <div id="w-gw"><label class="w-lbl">減重期間 週</label><input type="number" id="w-wk" inputmode="decimal" class="w-inp"></div>
@@ -199,7 +236,7 @@
         </h2>
         <div class="grid grid-cols-2 gap-3 text-xs">
           <div class="col-span-2"><label class="w-lbl">時間</label><input type="datetime-local" id="w-ft" class="w-inp"></div>
-          <div><label class="w-lbl">體重 kg</label><input type="number" step="0.1" id="w-fw" inputmode="decimal" class="w-inp"></div>
+          <div><label class="w-lbl">體重 kg</label><input type="number" step="0.01" id="w-fw" inputmode="decimal" class="w-inp"></div>
           <div><label class="w-lbl">時段</label><select id="w-fg" class="w-inp"><option>早晨空腹</option><option>睡前</option><option>餐後</option><option>運動後</option><option>一般</option></select></div>
           <div class="col-span-2"><label class="w-lbl">備註(睡眠 / 聚餐 / 運動…)</label><input id="w-fn" class="w-inp"></div>
         </div>
@@ -231,7 +268,7 @@
           <i data-lucide="database" class="w-4 h-4 text-emerald-600 inline-block align-[-2px] mr-1"></i>體重資料 (CSV)
         </summary>
         <div class="mt-3 space-y-3 text-xs">
-          <p class="text-[11px] text-slate-500 leading-relaxed">這裡只處理「體重紀錄與目標」的 CSV（沿用原本體重紀錄 App 的格式）。包含飲食在內的整份備份，請到「設定」分頁匯出完整備份。</p>
+          <p class="text-[11px] text-slate-500 leading-relaxed">這裡只處理「體重紀錄與目標」的 CSV（沿用原本體重紀錄 App 的格式）。包含飲食在內的整份備份，請到「設定」分頁使用「完整備份」（JSON 或 CSV）。</p>
           <div id="w-le" class="text-slate-500"></div>
           <div class="grid grid-cols-2 gap-2">
             <button id="w-sh" class="w-btn-s">分享備份 CSV</button>
@@ -267,21 +304,36 @@
 
     <!-- TAB 3: 趨勢圖表 -->
     <section id="tab-trends" class="tab-content hidden space-y-5">
+
       <div class="bg-white rounded-2xl p-4 shadow-sm border border-slate-100 space-y-3">
         <h2 class="text-base font-bold text-slate-800 flex items-center gap-2">
-          <i data-lucide="line-chart" class="w-5 h-5 text-emerald-600"></i> 近 7 天熱量與體重趨勢
+          <i data-lucide="line-chart" class="w-5 h-5 text-emerald-600"></i> <span id="trend-title">近 7 天熱量與體重趨勢</span>
         </h2>
-        <div class="h-64 w-full">
+        <div id="trend-range" class="flex gap-1.5">
+          <button type="button" data-r="7" class="rng-btn">近 7 天</button>
+          <button type="button" data-r="30" class="rng-btn">近 30 天</button>
+          <button type="button" data-r="all" class="rng-btn">全期</button>
+        </div>
+        <div id="trend-chart-wrap" class="h-64 w-full">
           <canvas id="chart-trends"></canvas>
         </div>
+        <div id="trend-empty" class="hidden text-center text-xs text-slate-400 py-10 leading-relaxed"></div>
+        <p id="trend-chart-note" class="text-[11px] text-slate-400 leading-relaxed"></p>
       </div>
 
-      <!-- 減脂效果評估卡片 -->
-      <div class="bg-gradient-to-br from-emerald-500 to-teal-600 rounded-2xl p-4 text-white shadow-md space-y-2">
-        <h3 class="font-bold text-sm opacity-90">近 7 天減脂評估報告</h3>
+      <!-- 減脂效果評估卡片 (資料足夠才顯示) -->
+      <div id="trend-card" class="hidden bg-gradient-to-br from-emerald-500 to-teal-600 rounded-2xl p-4 text-white shadow-md space-y-2">
+        <h3 id="trend-card-title" class="font-bold text-sm opacity-90">近 7 天減脂評估報告</h3>
         <div class="text-2xl font-black" id="trend-summary-text">評估中...</div>
-        <p class="text-xs opacity-80 leading-relaxed" id="trend-summary-detail">請持續記錄 3 天以上的體重與飲食資料以獲得精準減脂評估。</p>
+        <p class="text-xs opacity-80 leading-relaxed" id="trend-summary-detail"></p>
       </div>
+
+      <!-- 資料還不夠時的說明 -->
+      <div id="trend-need" class="hidden trend-need rounded-2xl p-4 text-xs leading-relaxed space-y-1">
+        <div class="font-bold text-sm" id="trend-need-title"></div>
+        <p id="trend-need-detail"></p>
+      </div>
+
     </section>
 
     <!-- TAB 3: 庫存與範本管理 -->
@@ -450,6 +502,17 @@
         <div id="body-card-content"></div>
       </div>
 
+      <!-- 開啟時預設頁面 -->
+      <div class="w-card space-y-3 text-xs">
+        <h3 class="font-bold text-sm text-slate-800 flex items-center gap-2"><i data-lucide="settings" class="w-4 h-4 text-emerald-600"></i> 開啟時的預設頁面</h3>
+        <select id="start-tab-select" class="w-inp">
+          <option value="tab-tracker">今日飲食</option>
+          <option value="tab-weight">體重</option>
+          <option value="tab-trends">趨勢</option>
+        </select>
+        <p class="text-[11px] text-slate-500 leading-relaxed">只用體重功能的話，選「體重」，每次打開 App 就直接進到體重頁。在任何頁面也都可以左右滑動來切換分頁。</p>
+      </div>
+
       <!-- 外觀 -->
       <div class="w-card space-y-3 text-xs">
         <h3 class="font-bold text-sm text-slate-800 flex items-center gap-2"><i data-lucide="moon" class="w-4 h-4 text-emerald-600"></i> 外觀</h3>
@@ -468,23 +531,35 @@
         <p class="text-[11px] text-amber-700 leading-relaxed">提醒僅在網頁開啟（含背景分頁）時觸發；iOS 須先「加入主畫面」。</p>
       </div>
 
-      <!-- 完整備份 (JSON) -->
+      <!-- 完整備份 (JSON / CSV) -->
       <div class="bg-white rounded-2xl p-4 shadow-sm border border-emerald-200 space-y-3">
         <h2 class="text-sm font-bold text-slate-800 flex items-center gap-2">
-          <i data-lucide="shield-check" class="w-4 h-4 text-emerald-600"></i> 完整備份 (JSON)
+          <i data-lucide="shield-check" class="w-4 h-4 text-emerald-600"></i> 完整備份
         </h2>
-        <p class="text-xs text-slate-500 leading-relaxed">包含飲食紀錄、體重紀錄與目標、食材庫、範本與個人設定。資料只存在這個瀏覽器中，不會自動同步，建議定期備份。</p>
+        <p class="text-xs text-slate-500 leading-relaxed">包含飲食紀錄、體重紀錄與目標、食材庫、範本與個人設定。資料只存在這個瀏覽器中，不會自動同步，建議定期備份。JSON 與 CSV 內容相同，CSV 可以用試算表開啟查看。</p>
         <div id="backup-status" class="text-xs font-medium"></div>
         <div id="storage-note" class="text-[11px] text-slate-500 leading-relaxed"></div>
+
+        <div class="text-[11px] font-bold text-slate-500 pt-1">JSON</div>
         <div class="grid grid-cols-2 gap-2 text-xs">
           <button id="btn-export-backup" class="bg-emerald-600 text-white rounded-xl px-3 py-2.5 font-medium flex items-center justify-center gap-1.5 hover:bg-emerald-700">
-            <i data-lucide="download" class="w-3.5 h-3.5"></i> 匯出完整備份
+            <i data-lucide="download" class="w-3.5 h-3.5"></i> 匯出完整JSON
           </button>
           <label class="bg-white text-emerald-700 border border-emerald-300 rounded-xl px-3 py-2.5 font-medium flex items-center justify-center gap-1.5 hover:bg-emerald-50 cursor-pointer">
-            <i data-lucide="upload" class="w-3.5 h-3.5"></i> 匯入完整備份
+            <i data-lucide="upload" class="w-3.5 h-3.5"></i> 匯入完整JSON
             <input type="file" id="file-import-backup" accept=".json,application/json" class="hidden">
           </label>
         </div>
+
+        <div class="text-[11px] font-bold text-slate-500 pt-1">CSV</div>
+        <div class="grid grid-cols-2 gap-2 text-xs">
+          <button id="btn-share-full-csv" class="w-btn-s">分享完整CSV</button>
+          <button id="btn-download-full-csv" class="w-btn-s">下載完整CSV</button>
+          <button id="btn-import-full-csv" class="w-btn-s">匯入完整CSV(覆蓋)</button>
+          <button id="btn-merge-full-csv" class="w-btn-s">合併匯入完整CSV</button>
+        </div>
+        <input type="file" id="file-import-full-csv" accept=".csv,text/csv" class="hidden">
+        <div class="text-[11px] text-slate-500 leading-relaxed"><b>覆蓋</b>：把目前所有資料換成檔案內容。<b>合併</b>：只補上缺少的資料，不刪除也不修改現有內容——飲食以「日期＋餐別」判斷（本機這一餐已有內容就保留本機），體重以「日期＋時間」判斷，食材與範本以 id 判斷；個人設定維持目前的。兩種匯入前都會建立快照，可用下方「還原」復原一次。</div>
         <button id="btn-restore-all" class="hidden w-full text-xs bg-slate-100 text-slate-700 rounded-xl px-3 py-2.5 font-medium hover:bg-slate-200"></button>
       </div>
 
@@ -795,7 +870,7 @@
       { id: "q4", name: "乳清蛋白粉", category: "protein2", calPer100: 400, proteinPer100: 80, unit: "g", pieceName: "勺", pieceG: 30 },
       { id: "q5", name: "黃豆 / 黑豆 (熟)", category: "protein2", calPer100: 170, proteinPer100: 16, unit: "g" },
       { id: "q6", name: "豆包", category: "protein2", calPer100: 83, proteinPer100: 23, unit: "g" },
-      { id: "q7", name: "質立希臘式優格(蛋白)", category: "protein2", calPer100: 116, proteinPer100: 8, unit: "g" },
+      { id: "q7", name: "質立希臘式優格", category: "protein2", calPer100: 116, proteinPer100: 8, unit: "g" },
 
       // 5. 澱粉 (全穀雜糧；熟重，燕麥為乾重)
       { id: "f14", name: "地瓜 (熟重)", category: "carb", calPer100: 125, proteinPer100: 1.3, unit: "g" },
@@ -869,14 +944,13 @@
       { id: "c13", name: "御飯糰 (超商，一般口味)", category: "cheat", calPer100: 190, proteinPer100: 5, unit: "g", pieceName: "個", pieceG: 100, unitOnly: true },
       { id: "c14", name: "超商三明治 (一般)", category: "cheat", calPer100: 280, proteinPer100: 12, unit: "g", pieceName: "個", pieceG: 100, unitOnly: true },
       { id: "c15", name: "滿漢大餐珍味牛肉麵", category: "cheat", calPer100: 318, proteinPer100: 8.3, unit: "g", pieceName: "包", pieceG: 173 },
-      { id: "c16", name: "義美蔥肉酥餅", category: "cheat", calPer100: 325, proteinPer100: 9.9, unit: "g", pieceName: "片", pieceG: 110 },
-      { id: "c17", name: "香菇肉焿", category: "cheat", calPer100: 92, proteinPer100: 9.2, unit: "g", pieceName: "份", pieceG: 200 },
-      { id: "c18", name: "筍絲焢肉", category: "cheat", calPer100: 356, proteinPer100: 18.1, unit: "g", pieceName: "份", pieceG: 200 },
-      { id: "c19", name: "紅燒牛腩", category: "cheat", calPer100: 118, proteinPer100: 10.7, unit: "g", pieceName: "份", pieceG: 200 },
-      { id: "c20", name: "番茄蘑菇", category: "cheat", calPer100: 140, proteinPer100: 7.1, unit: "g", pieceName: "份", pieceG: 120 },
-      { id: "c21", name: "牛丼", category: "cheat", calPer100: 246, proteinPer100: 14.4, unit: "g", pieceName: "份", pieceG: 180 },
-      { id: "c21", name: "牛丼", category: "cheat", calPer100: 246, proteinPer100: 14.4, unit: "g", pieceName: "份", pieceG: 180 },
-
+      { id: "c16", name: "維力老甕牛肉麵", category: "cheat", calPer100: 310.5, proteinPer100: 10.2, unit: "g", pieceName: "份", pieceG: 185 },
+      { id: "c17", name: "香菇肉焿", category: "cheat", calPer100: 46, proteinPer100: 4.6, unit: "g", pieceName: "份", pieceG: 200 },
+      { id: "c18", name: "筍絲焢肉", category: "cheat", calPer100: 178, proteinPer100: 9, unit: "g", pieceName: "份", pieceG: 200 },
+      { id: "c19", name: "紅燒牛腩", category: "cheat", calPer100: 59, proteinPer100: 5.4, unit: "g", pieceName: "份", pieceG: 200 },
+      { id: "c20", name: "番茄蘑菇", category: "cheat", calPer100: 117, proteinPer100: 5.9, unit: "g", pieceName: "份", pieceG: 120 },
+      { id: "c21", name: "牛丼", category: "cheat", calPer100: 137, proteinPer100: 8, unit: "g", pieceName: "份", pieceG: 180 },
+      { id: "c22", name: "義美蔥肉酥餅", category: "cheat", calPer100: 325, proteinPer100: 9.9, unit: "g", pieceName: "片", pieceG: 110 },
 
       // 9. 飲料 / 湯品 (每 100ml；即溶飲品以「杯」計)
       { id: "d1", name: "半糖珍奶", category: "drink", calPer100: 100, proteinPer100: 0.8, unit: "ml" },
@@ -929,7 +1003,7 @@
       weekEnd: todayStr()
     };
 
-    const DATA_VERSION = 6;
+    const DATA_VERSION = 7;
     const LS_DATA = "fat_loss_pwa_data";
     const LS_PREV_ALL = "fat_loss_pwa_prev_all";     // 匯入完整備份前的整份快照
     const LS_LAST_BACKUP = "fat_loss_pwa_last_backup";
@@ -988,7 +1062,7 @@
     function normalizeMeal(meal) {
       if (!meal || typeof meal !== "object") return meal;
       Object.keys(meal).forEach(k => {
-        if (k === "extra") return;
+        if (k === "extra" || k === "done") return;
         const v = meal[k];
         if (Array.isArray(v)) meal[k] = v.filter(it => it && it.id);
         else if (v && typeof v === "object") meal[k] = v.id ? [v] : [];
@@ -1107,9 +1181,15 @@
       bindEvents();
       WT.init();
       renderTracker();
+      initSwipeNav();
+      applyStartTab();
       lucide.createIcons();
       registerSW();
       if (!state.setup.done) OB.start();
+      else if (!localStorage.getItem(LS_SWIPE_HINT)) {
+        try { localStorage.setItem(LS_SWIPE_HINT, "1"); } catch (_) {}
+        setTimeout(() => showToast("小技巧：在頁面上左右滑動可以切換分頁", null, 5000), 1200);
+      }
       // 請瀏覽器把資料標記為「持久儲存」，降低空間不足時被清除的機率
       updateStorageNote(true);
     }
@@ -1127,6 +1207,8 @@
 
     // ---- 外觀：自動 / 淺色 / 深色 ----
     const LS_THEME = "fat_loss_pwa_theme";
+    const LS_SWIPE_HINT = "fat_loss_pwa_swipe_hint";
+    const LS_TREND_RANGE = "fat_loss_pwa_trend_range";
     const themePref = () => localStorage.getItem(LS_THEME) || "auto";
     const isDark = () => document.documentElement.classList.contains("dark");
     function applyTheme() {
@@ -1160,7 +1242,13 @@
       if (mq.addEventListener) mq.addEventListener("change", onChange); else if (mq.addListener) mq.addListener(onChange);
     }
 
-    function switchTab(target) {
+    const TAB_ORDER = () => Array.from(document.querySelectorAll(".nav-btn")).map(b => b.getAttribute("data-target"));
+    let currentTab = "tab-tracker";
+
+    function switchTab(target, dir) {
+      const order = TAB_ORDER();
+      if (!byId(target)) return;
+      if (!dir && target !== currentTab) dir = order.indexOf(target) > order.indexOf(currentTab) ? "right" : "left";
       document.querySelectorAll(".nav-btn").forEach(b => {
         const on = b.getAttribute("data-target") === target;
         b.classList.toggle("active", on);
@@ -1168,12 +1256,61 @@
         b.classList.toggle("text-slate-400", !on);
       });
       document.querySelectorAll(".tab-content").forEach(c => c.classList.add("hidden"));
-      byId(target).classList.remove("hidden");
+      const el = byId(target);
+      el.classList.remove("hidden", "tab-in-left", "tab-in-right");
+      if (dir && target !== currentTab) {
+        void el.offsetWidth;   // 重新觸發動畫
+        el.classList.add(dir === "right" ? "tab-in-right" : "tab-in-left");
+        setTimeout(() => el.classList.remove("tab-in-left", "tab-in-right"), 300);
+      }
+      currentTab = target;
       window.scrollTo(0, 0);
       if (target === "tab-weight") WT.render();
       if (target === "tab-trends") renderTrends();
       if (target === "tab-library") renderLibrary();
       if (target === "tab-profile") renderProfile();
+    }
+
+    // 左右滑動換頁：往左滑 = 下一頁、往右滑 = 上一頁 (順序同底部選單)
+    function initSwipeNav() {
+      let st = null;
+      const blocked = (el) => {
+        for (let n = el; n && n !== document.body; n = n.parentElement) {
+          const tag = n.tagName;
+          if (tag === "INPUT" || tag === "SELECT" || tag === "TEXTAREA" || n.isContentEditable) return true;
+          if (n.hasAttribute && n.hasAttribute("data-noswipe")) return true;
+          if (n.scrollWidth > n.clientWidth + 2) {
+            const ox = getComputedStyle(n).overflowX;
+            if (ox === "auto" || ox === "scroll") return true;   // 可以橫向捲動的區塊 (表格、圖表…) 不換頁
+          }
+        }
+        return false;
+      };
+      const overlayOpen = () => !!document.querySelector(".fixed.inset-0:not(.hidden)");
+      document.addEventListener("touchstart", (e) => {
+        st = null;
+        if (e.touches.length !== 1) return;
+        const t = e.touches[0];
+        if (t.clientX < 20 || t.clientX > window.innerWidth - 20) return;   // 避開系統邊緣返回手勢
+        if (overlayOpen() || blocked(e.target)) return;
+        st = { x: t.clientX, y: t.clientY, t: Date.now() };
+      }, { passive: true });
+      document.addEventListener("touchend", (e) => {
+        if (!st) return;
+        const t = e.changedTouches[0], dx = t.clientX - st.x, dy = t.clientY - st.y, dt = Date.now() - st.t;
+        st = null;
+        if (Math.abs(dx) < 70 || Math.abs(dx) < Math.abs(dy) * 1.8 || dt > 800) return;
+        if (overlayOpen()) return;
+        const order = TAB_ORDER(), i = order.indexOf(currentTab), j = i + (dx < 0 ? 1 : -1);
+        if (j < 0 || j >= order.length) return;
+        switchTab(order[j], dx < 0 ? "right" : "left");
+      }, { passive: true });
+      document.addEventListener("touchcancel", () => { st = null; }, { passive: true });
+    }
+
+    function applyStartTab() {
+      const t = state.profile.startTab;
+      if (t && t !== "tab-tracker" && byId(t)) switchTab(t, null);
     }
 
     function registerSW() {
@@ -1232,6 +1369,19 @@
       if (ver < 4) migrateToV4();
       if (ver < 5) migrateToV5();
       if (ver < 6) migrateToV6();
+      if (ver < 7) migrateToV7();
+    }
+
+    // v7：每餐有「完成 / 編輯」狀態；升級前已經有內容的餐點視為已完成 (顯示精簡版，可按「編輯」再改)
+    function migrateToV7() {
+      Object.keys(state.dailyLogs).forEach(ds => {
+        const log = state.dailyLogs[ds];
+        if (!log || !log.meals) return;
+        Object.keys(log.meals).forEach(mk => {
+          const m = log.meals[mk];
+          if (m && typeof m === "object" && mealHasItems(ds, mk)) m.done = true;
+        });
+      });
     }
 
     // v6：預設值不拿來判定 (身高 / 目標熱量 / 蛋白質需「確認過」才算數)；舊使用者視為已確認
@@ -1371,6 +1521,11 @@
 
       byId("btn-export-backup").addEventListener("click", exportFullBackup);
       byId("file-import-backup").addEventListener("change", importFullBackup);
+      byId("btn-share-full-csv").addEventListener("click", shareFullCsv);
+      byId("btn-download-full-csv").addEventListener("click", () => downloadFullCsv());
+      byId("btn-import-full-csv").addEventListener("click", () => { fullCsvMode = "replace"; byId("file-import-full-csv").click(); });
+      byId("btn-merge-full-csv").addEventListener("click", () => { fullCsvMode = "merge"; byId("file-import-full-csv").click(); });
+      byId("file-import-full-csv").addEventListener("change", importFullCsv);
       byId("btn-reminder-go").addEventListener("click", () => exportFullBackup());
       byId("btn-restore-all").addEventListener("click", restoreAll);
       byId("btn-reminder-snooze").addEventListener("click", () => {
@@ -1379,6 +1534,13 @@
       });
 
       document.getElementById("btn-save-profile").addEventListener("click", saveProfile);
+      document.querySelectorAll("#trend-range button").forEach(b => b.addEventListener("click", () => setTrendRange(b.dataset.r)));
+      byId("start-tab-select").addEventListener("change", (e) => {
+        state.profile.startTab = e.target.value;
+        saveState();
+        const label = { "tab-tracker": "今日飲食", "tab-weight": "體重", "tab-trends": "趨勢" }[e.target.value];
+        showToast(`之後開啟 App 會先顯示「${label}」`);
+      });
     }
 
     // --- 切換日期 / 7 天日期列 ---
@@ -1406,10 +1568,10 @@
       const sta = info.status;
       const verdict = !sta ? "" : (sta.maintain
         ? (sta.st === "on" ? ' <span class="text-emerald-600 font-medium">趨勢在區間內</span>' : ' <span class="text-amber-700 font-medium">趨勢離開區間</span>')
-        : (sta.st === "ahead" ? ` <span class="text-emerald-600 font-medium">趨勢領先 ${Math.abs(sta.gap).toFixed(1)}</span>`
+        : (sta.st === "ahead" ? ` <span class="text-emerald-600 font-medium">趨勢領先 ${Math.abs(sta.gap).toFixed(2)}</span>`
           : (sta.st === "on" ? ' <span class="text-lime-600 font-medium">趨勢貼近目標</span>'
-            : ` <span class="${sta.st === "far" ? "text-red-600" : "text-amber-600"} font-medium">趨勢落後 ${sta.gap.toFixed(1)}</span>`)));
-      el.innerHTML = `⚖️ <b class="text-slate-800">${info.mean} kg</b> <span class="text-slate-400">（${esc(tag)}）</span>${verdict}`;
+            : ` <span class="${sta.st === "far" ? "text-red-600" : "text-amber-600"} font-medium">趨勢落後 ${sta.gap.toFixed(2)}</span>`)));
+      el.innerHTML = `⚖️ <b class="text-slate-800">${info.mean.toFixed(2)} kg</b> <span class="text-slate-400">（${esc(tag)}）</span>${verdict}`;
     }
 
     // 近 N 天平均攝取 (給體重分頁診斷用)；目標未確認或紀錄太少時回傳 null
@@ -1493,7 +1655,32 @@
         const card = document.createElement("div");
         const ms = MEAL_STYLE[m.key] || MEAL_STYLE.breakfast;
         card.className = `bg-white rounded-2xl shadow-sm border border-slate-100 border-l-4 ${ms.bar} overflow-hidden`;
+        const isDone = mealData.done === true;
+        const mealHasContent = extras.length > 0 || CAT_KEYS.some(c => slotItems(mealData, c.key).some(it => it && it.id));
 
+        if (isDone) {
+          // 已完成：鎖定，只顯示有紀錄的項目
+          const doneRows = CAT_KEYS.map(cat => {
+            const items = slotItems(mealData, cat.key).filter(it => it && it.id && state.foods.some(f => f.id === it.id));
+            if (!items.length) return "";
+            return `<div class="space-y-1"><div class="mrow-cat">${esc(cat.label.replace(/^\d+\.\s*/, ""))}</div>${items.map(it => {
+              const f = state.foods.find(x => x.id === it.id), w = parseFloat(it.weight) || 0;
+              return `<div class="mrow"><span class="mrow-name">${f.fav ? "★ " : ""}${esc(f.name)}</span><span class="mrow-amt">${esc(formatAmount(f, w))}</span><span class="w-[72px] shrink-0 text-right leading-tight"><b class="text-emerald-700">${Math.round(f.calPer100 * w / 100)} kcal</b><span class="block text-[11px] text-blue-600">蛋白質 ${(f.proteinPer100 * w / 100).toFixed(1)}g</span></span></div>`;
+            }).join("")}</div>`;
+          }).join("");
+          const doneExtras = extras.map(x => `<div class="mrow"><span class="mrow-name">📝 ${esc(x.name || "外食")}</span><span class="shrink-0 font-bold text-amber-700">${Math.round(x.cal)} kcal${x.protein > 0 ? ` · ${(Math.round(x.protein * 10) / 10)}g` : ""}</span></div>`).join("");
+          card.innerHTML = `
+            <div class="flex flex-wrap justify-between items-center gap-y-2 px-4 py-3 border-b ${ms.head}">
+              <div>
+                <h3 class="font-bold text-sm ${ms.title}">${m.label}<span class="meal-done-badge">✓ 已完成</span></h3>
+                <span class="text-xs ${ms.sub}">當餐：${Math.round(mealCal)} kcal / ${mealProtein.toFixed(1)}g 蛋白質</span>
+              </div>
+              <button type="button" onclick="editMeal('${m.key}')" class="btn-meal-edit ml-auto">編輯</button>
+            </div>
+            <div class="p-4 space-y-2.5">
+              ${(doneRows || doneExtras) ? doneRows + (doneExtras ? `<div class="space-y-1.5">${doneExtras}</div>` : "") : '<div class="meal-empty">這一餐沒有紀錄</div>'}
+            </div>`;
+        } else {
         card.innerHTML = `
           <div class="flex flex-wrap justify-between items-center gap-y-2 px-4 py-3 border-b ${ms.head}">
             <div>
@@ -1504,6 +1691,7 @@
               <button onclick="copyMealFromPrev('${m.key}')" class="text-xs bg-white border border-slate-200 text-slate-700 hover:bg-slate-100 px-2.5 py-1 rounded-lg transition font-medium">複製昨日</button>
               <button onclick="openTplModal('${m.key}')" class="text-xs bg-white border border-emerald-200 text-emerald-700 hover:bg-emerald-50 px-2.5 py-1 rounded-lg transition font-medium">範本</button>
               <button onclick="clearMeal('${m.key}')" class="text-xs bg-white border border-red-200 text-red-600 hover:bg-red-50 px-2.5 py-1 rounded-lg transition font-medium">清除</button>
+              <button type="button" onclick="completeMeal('${m.key}')" class="btn-meal-done">完成</button>
             </div>
           </div>
           <div class="p-4 space-y-3">
@@ -1535,7 +1723,7 @@
                       <i data-lucide="chevron-down" class="w-3.5 h-3.5 text-slate-400 shrink-0"></i>
                     </button>
                     <div class="relative w-[68px] shrink-0">
-                      <input type="number" inputmode="decimal" min="0" step="${pieceG ? '0.5' : 'any'}" placeholder="${selFood ? '' : 'g/ml'}" value="${shownVal}" onchange="updateMealItem('${m.key}', '${cat.key}', ${idx}, null, this.value)" class="w-full bg-slate-50 border border-slate-200 rounded-lg p-1.5 ${selFood ? 'pr-6 text-right' : 'text-center'} focus:outline-none focus:ring-1 focus:ring-emerald-500">
+                      <input type="number" id="amt-${m.key}-${cat.key}-${idx}" inputmode="decimal" min="0" step="${pieceG ? '0.5' : 'any'}" placeholder="${selFood ? '' : 'g/ml'}" value="${shownVal}" onchange="updateMealItem('${m.key}', '${cat.key}', ${idx}, null, this.value)" class="w-full bg-slate-50 border border-slate-200 rounded-lg p-1.5 ${selFood ? 'pr-6 text-right' : 'text-center'} focus:outline-none focus:ring-1 focus:ring-emerald-500">
                       ${selFood ? `<span class="absolute right-1.5 top-1/2 -translate-y-1/2 text-[10px] text-slate-400 pointer-events-none">${esc(unitSuffix)}</span>` : ''}
                     </div>
                     <div class="w-[72px] shrink-0 text-right leading-tight">${infoHtml}</div>
@@ -1573,8 +1761,10 @@
               </div>`).join('')}
             <button onclick="openManualModal('${m.key}', null)" class="w-full text-amber-700 bg-amber-50/60 border border-dashed border-amber-300 rounded-lg py-1.5 font-medium hover:bg-amber-50">＋ 手動輸入外食 / 其他熱量</button>
           </div>
+          ${mealHasContent ? `<button type="button" onclick="completeMeal('${m.key}')" class="btn-meal-done btn-meal-done-wide">✓ 完成這一餐</button>` : ""}
           </div>
         `;
+        }
         container.appendChild(card);
       });
 
@@ -1729,7 +1919,7 @@
 
     function pickFood(foodId) {
       closeModal("modal-picker");
-      if (picker.mode === "tpl") return tplSetFood(picker.cat, picker.idx, foodId);
+      if (picker.mode === "tpl") { tplSetFood(picker.cat, picker.idx, foodId); if (foodId !== "") focusAmount(`tplamt-${picker.cat}-${picker.idx}`); return; }
       if (foodId === "") {
         const meal = ((state.dailyLogs[state.currentDate] || {}).meals || {})[picker.meal];
         if (meal) {
@@ -1742,6 +1932,7 @@
         return;
       }
       updateMealItem(picker.meal, picker.cat, picker.idx, foodId, null);
+      focusAmount(`amt-${picker.meal}-${picker.cat}-${picker.idx}`);
     }
 
     function toggleFav(foodId) {
@@ -1798,6 +1989,49 @@
       saveState();
       renderTracker();
       offerUndo(`已複製 ${parseDate(src).getMonth() + 1}/${parseDate(src).getDate()} 的${mealName}`, snap);
+    }
+
+    // --- 每餐「完成 / 編輯」 ---
+    function completeMeal(mealKey) {
+      const meal = ((state.dailyLogs[state.currentDate] || {}).meals || {})[mealKey];
+      if (!meal) return showToast("這一餐還沒有紀錄");
+      // 有選食物卻沒填份量：先請使用者補上，避免鎖定後才發現漏填
+      for (const c of CAT_KEYS) {
+        for (const it of slotItems(meal, c.key)) {
+          if (it && it.id && !(parseFloat(it.weight) > 0)) {
+            const f = state.foods.find(x => x.id === it.id);
+            return showToast(`「${f ? f.name : "有一項食物"}」還沒填份量`, "#b45309");
+          }
+        }
+      }
+      if (!mealHasItems(state.currentDate, mealKey)) return showToast("這一餐還沒有紀錄");
+      // 清掉沒選食物的空格子
+      CAT_KEYS.forEach(c => {
+        if (!Array.isArray(meal[c.key])) return;
+        meal[c.key] = meal[c.key].filter(it => it && it.id);
+        if (!meal[c.key].length) delete meal[c.key];
+      });
+      meal.done = true;
+      saveState();
+      renderTracker();
+      showToast("已完成這一餐");
+    }
+
+    function editMeal(mealKey) {
+      const meal = ((state.dailyLogs[state.currentDate] || {}).meals || {})[mealKey];
+      if (!meal) return;
+      delete meal.done;
+      saveState();
+      renderTracker();
+    }
+
+    // 選完食物後，自動跳到重量 / 單位數欄位，直接開始輸入
+    function focusAmount(inputId) {
+      const el = byId(inputId);
+      if (!el) return;
+      el.focus();
+      try { el.select(); } catch (_) {}
+      setTimeout(() => { try { el.scrollIntoView({ block: "center", behavior: "smooth" }); } catch (_) {} }, 80);
     }
 
     function getMealForEdit(mealKey) {
@@ -1959,7 +2193,7 @@
         <button type="button" onclick="openPicker(null, '${catKey}', ${idx}, 'tpl')" class="flex-1 min-w-0 flex items-center justify-between gap-1 bg-slate-50 border border-slate-200 rounded-lg p-1.5 text-left">
           <span class="truncate ${f ? "text-slate-700" : "text-slate-400"}">${f ? (f.fav ? "★ " : "") + esc(f.name) : "-- 請選擇 --"}</span><i data-lucide="chevron-down" class="w-3.5 h-3.5 text-slate-400 shrink-0"></i>
         </button>
-        <div class="relative w-[68px] shrink-0"><input type="number" inputmode="decimal" min="0" step="${pieceG ? "0.5" : "any"}" placeholder="${f ? "" : "g/ml"}" value="${shown}" onchange="tplAmount('${catKey}', ${idx}, this.value)" class="w-full bg-slate-50 border border-slate-200 rounded-lg p-1.5 ${f ? "pr-6 text-right" : "text-center"}">
+        <div class="relative w-[68px] shrink-0"><input type="number" id="tplamt-${catKey}-${idx}" inputmode="decimal" min="0" step="${pieceG ? "0.5" : "any"}" placeholder="${f ? "" : "g/ml"}" value="${shown}" onchange="tplAmount('${catKey}', ${idx}, this.value)" class="w-full bg-slate-50 border border-slate-200 rounded-lg p-1.5 ${f ? "pr-6 text-right" : "text-center"}">
           ${f ? `<span class="absolute right-1.5 top-1/2 -translate-y-1/2 text-[10px] text-slate-400 pointer-events-none">${esc(suffix)}</span>` : ""}</div>
         <div class="w-[72px] shrink-0 text-right leading-tight">${info}</div></div>`;
     }
@@ -2132,89 +2366,158 @@
 
     // --- TAB 2: 趨勢與圖表 ---
     let chartInstance = null;
+    // 趨勢頁：區間 (7 / 30 / 全期)；資料夠才給「減脂評估」
+    const TREND_RANGES = { "7": { label: "近 7 天", need: 3 }, "30": { label: "近 30 天", need: 7 }, "all": { label: "全期", need: 7 } };
+    const TREND_MIN_MEALS = 2, TREND_MIN_KCAL = 700;
+
+    function getTrendRange() {
+      let r = "7";
+      try { r = localStorage.getItem(LS_TREND_RANGE) || "7"; } catch (_) {}
+      return TREND_RANGES[r] ? r : "7";
+    }
+    function setTrendRange(r) {
+      try { localStorage.setItem(LS_TREND_RANGE, r); } catch (_) {}
+      renderTrends();
+    }
+
+    // 「有效紀錄日」：至少記 2 餐、合計 ≥ 700 kcal。只記一兩樣東西的日子不能當整天的攝取量
+    function dayIsComplete(ds) {
+      const log = state.dailyLogs[ds];
+      if (!log || !log.meals) return false;
+      const meals = Object.keys(log.meals).filter(k => mealHasItems(ds, k)).length;
+      return meals >= TREND_MIN_MEALS && dayTotals(ds).cal >= TREND_MIN_KCAL;
+    }
+
+    function trendDates(r) {
+      const today = todayStr();
+      if (r !== "all") { const n = +r, out = []; for (let i = n - 1; i >= 0; i--) out.push(addDays(today, -i)); return out; }
+      let first = null;
+      Object.keys(state.dailyLogs).forEach(ds => { if (dayHasRecord(ds) && (!first || ds < first)) first = ds; });
+      (state.weight.rec || []).forEach(e => { if (!first || e.d < first) first = e.d; });
+      if (!first || first > today) first = addDays(today, -6);
+      let n = daysBetween(first, today) + 1;
+      n = Math.max(7, Math.min(n, 1100));
+      const out = [];
+      for (let i = n - 1; i >= 0; i--) out.push(addDays(today, -i));
+      return out;
+    }
+
     function renderTrends() {
-      const dates = [];
-      for(let i=6; i>=0; i--) {
-        dates.push(addDays(todayStr(), -i));
-      }
+      const r = getTrendRange(), R = TREND_RANGES[r];
+      const dates = trendDates(r);
+      const n = dates.length;
+      document.querySelectorAll("#trend-range button").forEach(b => b.classList.toggle("on", b.dataset.r === r));
+      byId("trend-title").textContent = (r === "all" ? `全期（${n} 天）` : R.label) + "熱量與體重趨勢";
+      byId("trend-card-title").textContent = (r === "all" ? "全期" : R.label) + "減脂評估報告";
 
-      const calData = [];
-      const weightData = [];
-
+      const calData = [], weightData = [];
+      let validDays = 0, anyCalDay = 0, calSum = 0;
       dates.forEach(d => {
-        const dayCal = state.dailyLogs[d] ? dayTotals(d).cal : 0;
-        calData.push(dayCal > 0 ? Math.round(dayCal) : null);
+        const ok = dayIsComplete(d);
+        if (dayHasRecord(d)) anyCalDay++;
+        if (ok) { const c = Math.round(dayTotals(d).cal); calData.push(c); calSum += c; validDays++; } else calData.push(null);
         weightData.push(WT.dayMean(d));
       });
+      const calPts = calData.filter(x => x != null).length, wPts = weightData.filter(x => x != null).length;
 
-      const ctx = document.getElementById("chart-trends").getContext("2d");
-      applyChartTheme();
-      if(chartInstance) chartInstance.destroy();
-
-      chartInstance = new Chart(ctx, {
-        type: "line",
-        data: {
-          labels: dates.map(d => d.slice(5)),
-          datasets: [
-            {
-              label: "攝取熱量 (kcal)",
-              data: calData,
-              borderColor: "#10b981",
-              backgroundColor: "rgba(16, 185, 129, 0.1)",
-              yAxisID: "yCal",
-              spanGaps: true,
-              tension: 0.3,
-              fill: true
+      // ---- 圖表 ----
+      const wrap = byId("trend-chart-wrap"), empty = byId("trend-empty"), note = byId("trend-chart-note");
+      if (chartInstance) { chartInstance.destroy(); chartInstance = null; }
+      if (calPts + wPts < 2) {
+        wrap.classList.add("hidden"); empty.classList.remove("hidden"); note.textContent = "";
+        empty.innerHTML = "資料還不夠畫出趨勢<br>多記幾天體重或飲食，這裡就會出現曲線";
+      } else {
+        wrap.classList.remove("hidden"); empty.classList.add("hidden");
+        note.textContent = calPts ? `熱量曲線只畫「有效紀錄日」（當天至少記 ${TREND_MIN_MEALS} 餐、合計 ≥ ${TREND_MIN_KCAL} kcal），避免只記一兩樣就被當成整天。` : "";
+        const ctx = document.getElementById("chart-trends").getContext("2d");
+        applyChartTheme();
+        const many = n > 45;
+        const lab = (d) => n > 300 ? d.slice(2) : d.slice(5);
+        chartInstance = new Chart(ctx, {
+          type: "line",
+          data: {
+            labels: dates.map(lab),
+            datasets: [
+              {
+                label: "攝取熱量 (kcal)",
+                data: calData,
+                borderColor: "#10b981",
+                backgroundColor: "rgba(16, 185, 129, 0.1)",
+                yAxisID: "yCal",
+                spanGaps: true,
+                tension: 0.3,
+                fill: true,
+                pointRadius: many ? 1.5 : 3
+              },
+              {
+                label: "體重 (kg)",
+                data: weightData,
+                borderColor: "#3b82f6",
+                backgroundColor: "#3b82f6",
+                yAxisID: "yWeight",
+                spanGaps: true,
+                tension: 0.3,
+                pointRadius: many ? 1.5 : 3
+              }
+            ]
+          },
+          options: {
+            responsive: true,
+            maintainAspectRatio: false,
+            plugins: {
+              tooltip: { callbacks: { label: (c) => c.parsed.y == null ? "" : (c.dataset.yAxisID === "yWeight" ? `體重：${c.parsed.y.toFixed(2)} kg` : `攝取：${c.parsed.y} kcal`) } }
             },
-            {
-              label: "體重 (kg)",
-              data: weightData,
-              borderColor: "#3b82f6",
-              backgroundColor: "#3b82f6",
-              yAxisID: "yWeight",
-              spanGaps: true,
-              tension: 0.3
-            }
-          ]
-        },
-        options: {
-          responsive: true,
-          maintainAspectRatio: false,
-          scales: {
-            yCal: {
-              type: "linear",
-              position: "left",
-              title: { display: true, text: "kcal", font: { size: 10 } },
-              grid: { display: false }
-            },
-            yWeight: {
-              type: "linear",
-              position: "right",
-              title: { display: true, text: "kg", font: { size: 10 } },
-              grid: { display: false }
+            scales: {
+              x: { ticks: { autoSkip: true, maxRotation: 0 } },
+              yCal: {
+                type: "linear",
+                position: "left",
+                title: { display: true, text: "kcal", font: { size: 10 } },
+                grid: { display: false }
+              },
+              yWeight: {
+                type: "linear",
+                position: "right",
+                title: { display: true, text: "kg", font: { size: 10 } },
+                grid: { display: false }
+              }
             }
           }
-        }
-      });
-
-      const validCals = calData.filter(c => c);
-      if(validCals.length >= 1) {
-        const avgCal = validCals.reduce((a,b)=>a+b, 0) / validCals.length;
-        const slope = WT.slopePerWeek();
-        const lwT = getLatestWeight();
-        const tdeeCalc = lwT ? calcBMRTDEE(state.profile, lwT.w) : null;
-        const estTDEE = tdeeCalc ? tdeeCalc.tdee : (state.profile.calConfirmed ? state.profile.calTarget + 400 : null);
-        if (estTDEE == null) {
-          document.getElementById("trend-summary-text").innerText = "預估每週減脂量：資料不足";
-          document.getElementById("trend-summary-detail").innerText = `近 7 天平均每日攝取 ${Math.round(avgCal)} kcal。到「設定」填入性別、年齡並確認目標熱量後，才能估算熱量赤字。` + (slope == null ? "" : `近 4 週實測體重趨勢約 ${slope > 0 ? "+" : ""}${slope.toFixed(2)} kg/週。`);
-          return;
-        }
-        const dailyDeficit = estTDEE - avgCal;
-        const weeklyFatLoss = (dailyDeficit * 7) / 7700;
-
-        document.getElementById("trend-summary-text").innerText = `預估每週減純脂 ${Math.max(0, weeklyFatLoss).toFixed(2)} kg`;
-        document.getElementById("trend-summary-detail").innerText = `近 7 天平均每日攝取 ${Math.round(avgCal)} kcal，創造熱量赤字約 ${Math.round(dailyDeficit)} kcal/天（TDEE 估 ${Math.round(estTDEE)}${tdeeCalc ? "" : "；尚未設定性別與年齡，暫以目標熱量 +400 概估"}）。` + (slope == null ? "" : `近 4 週實測體重趨勢約 ${slope > 0 ? "+" : ""}${slope.toFixed(2)} kg/週（含水分波動，僅供對照）。`);
+        });
       }
+
+      // ---- 減脂評估：有效紀錄日不夠就不給數字 ----
+      const card = byId("trend-card"), need = byId("trend-need");
+      const slope = WT.slopePerWeek();
+      const slopeTxt = slope == null ? "" : `近 4 週實測體重趨勢約 ${slope > 0 ? "+" : ""}${slope.toFixed(2)} kg/週。`;
+      const lwT = getLatestWeight();
+      const tdeeCalc = lwT ? calcBMRTDEE(state.profile, lwT.w) : null;
+      const estTDEE = tdeeCalc ? tdeeCalc.tdee : (state.profile.calConfirmed ? state.profile.calTarget + 400 : null);
+
+      if (validDays < R.need) {
+        card.classList.add("hidden"); need.classList.remove("hidden");
+        if (anyCalDay === 0) {
+          byId("trend-need-title").textContent = "這個區間沒有飲食紀錄";
+          byId("trend-need-detail").textContent = "只記體重也沒問題，體重走勢請看「體重」分頁。開始記飲食後，這裡會顯示熱量赤字與預估減脂量。" + slopeTxt;
+        } else {
+          byId("trend-need-title").textContent = "資料還不夠，暫時看不出趨勢";
+          byId("trend-need-detail").textContent = `${R.label}內有 ${validDays} / ${R.need} 天「有效紀錄日」。有效紀錄日＝當天至少記 ${TREND_MIN_MEALS} 餐、合計 ≥ ${TREND_MIN_KCAL} kcal；只記一兩餐的日子不算，免得把整天攝取低估、減脂量算太樂觀。再多記幾天就會顯示評估。` + slopeTxt;
+        }
+        return;
+      }
+      need.classList.add("hidden");
+      const avgCal = calSum / validDays;
+      if (estTDEE == null) {
+        card.classList.remove("hidden");
+        byId("trend-summary-text").innerText = "預估每週減脂量：資料不足";
+        byId("trend-summary-detail").innerText = `${R.label}平均每日攝取 ${Math.round(avgCal)} kcal（${validDays} 個有效紀錄日）。到「設定」填入性別、年齡並確認目標熱量後，才能估算熱量赤字。` + slopeTxt;
+        return;
+      }
+      const dailyDeficit = estTDEE - avgCal;
+      const weeklyFatLoss = (dailyDeficit * 7) / 7700;
+      card.classList.remove("hidden");
+      byId("trend-summary-text").innerText = `預估每週減純脂 ${Math.max(0, weeklyFatLoss).toFixed(2)} kg`;
+      byId("trend-summary-detail").innerText = `${R.label}平均每日攝取 ${Math.round(avgCal)} kcal（${validDays} 個有效紀錄日），創造熱量赤字約 ${Math.round(dailyDeficit)} kcal/天（TDEE 估 ${Math.round(estTDEE)}${tdeeCalc ? "" : "；尚未設定性別與年齡，暫以目標熱量 +400 概估"}）。` + slopeTxt;
     }
 
     // --- TAB 3: 庫存與範本管理 ---
@@ -2640,6 +2943,7 @@
       byId("profile-sex").value = pf.sex || "";
       byId("profile-age").value = pf.age || "";
       byId("profile-activity").value = String(pf.activity || 1.375);
+      byId("start-tab-select").value = pf.startTab || "tab-tracker";
       renderBodyCard();
       renderBackupStatus();
       updateRestoreButton();
@@ -2704,7 +3008,7 @@
         </div>`;
 
       let html = state.profile.heightConfirmed ? "" : `<p class="mb-2 text-amber-700 bg-amber-50 border border-amber-200 rounded-lg px-2.5 py-1.5">身高目前還是預設值（${state.profile.height} cm），請填你的實際身高並按「儲存設定」，BMI 與 TDEE 才準。</p>`;
-      html += row("目前體重", `${lw.w} kg`, `取自 ${dd.getMonth() + 1}/${dd.getDate()} 的紀錄`);
+      html += row("目前體重", `${(Math.round(lw.w * 100) / 100).toFixed(2)} kg`, `取自 ${dd.getMonth() + 1}/${dd.getDate()} 的紀錄`);
 
       const hOk = h >= 100 && h <= 230;
       if (hOk) {
@@ -2866,6 +3170,50 @@
       showToast("備份已匯出");
     }
 
+    // 檢查備份資料的基本結構 (JSON / CSV 共用)；不合格就丟出錯誤
+    const isObjX = (x) => x && typeof x === "object" && !Array.isArray(x);
+    function validateFullData(d) {
+      if (!d || !Array.isArray(d.foods) || !Array.isArray(d.templates) || !isObjX(d.dailyLogs)) {
+        throw new Error("這不是有效的備份檔");
+      }
+      const badFood = d.foods.find(f => !f || typeof f.id !== "string" || typeof f.name !== "string" || !Number.isFinite(f.calPer100) || !Number.isFinite(f.proteinPer100));
+      if (badFood) throw new Error("食材資料格式不正確");
+    }
+
+    function snapshotAll() {
+      try { localStorage.setItem(LS_PREV_ALL, JSON.stringify({ t: Date.now(), raw: localStorage.getItem(LS_DATA) })); } catch (_) {}
+    }
+    function refreshAfterImport() {
+      setCurrentDate(todayStr());
+      WT.fillGoalForm();
+      WT.render();
+      renderLibrary();
+      renderProfile();
+    }
+
+    // 覆蓋匯入 (JSON / CSV 共用)：確認 → 快照 → 取代全部資料
+    function replaceWithFullData(d, ver, exportedAt) {
+      const days = Object.keys(d.dailyLogs).length;
+      const wCount = d.weight && Array.isArray(d.weight.rec) ? d.weight.rec.length : Object.values(d.dailyLogs).filter(l => l && l.weight > 0).length;
+      const when = exportedAt ? new Date(exportedAt).toLocaleString("zh-TW") : "未知";
+      const msg = `備份檔內容：\n• ${days} 天的飲食紀錄\n• ${wCount} 筆體重紀錄\n• ${d.foods.length} 項食材、${d.templates.length} 個範本\n• 匯出時間：${when}\n\n匯入後會「取代」目前所有資料（之後可用「還原」按鈕復原一次），確定嗎？`;
+      if (!confirm(msg)) return false;
+
+      // 先保留整份快照，匯入錯了還能還原
+      snapshotAll();
+
+      state.profile = Object.assign({}, state.profile, isObjX(d.profile) ? d.profile : {});
+      state.foods = d.foods;
+      state.templates = d.templates;
+      state.dailyLogs = d.dailyLogs;
+      WT.replaceAll(d.weight);
+      migrateData(ver || 1);
+      saveState();
+      refreshAfterImport();
+      showToast(`已匯入 ${days} 天的飲食紀錄與 ${state.weight.rec.length} 筆體重紀錄`);
+      return true;
+    }
+
     function importFullBackup(e) {
       const file = e.target.files[0];
       if (!file) return;
@@ -2874,35 +3222,229 @@
         try {
           const obj = JSON.parse(ev.target.result);
           const d = obj && obj.data ? obj.data : obj;
-          const isObj = (x) => x && typeof x === "object" && !Array.isArray(x);
-          if (!d || !Array.isArray(d.foods) || !Array.isArray(d.templates) || !isObj(d.dailyLogs)) {
-            throw new Error("這不是有效的備份檔");
-          }
-          const badFood = d.foods.find(f => !f || typeof f.id !== "string" || typeof f.name !== "string" || !Number.isFinite(f.calPer100) || !Number.isFinite(f.proteinPer100));
-          if (badFood) throw new Error("食材資料格式不正確");
+          validateFullData(d);
+          replaceWithFullData(d, obj.dataVersion || 1, obj.exportedAt);
+        } catch (err) {
+          alert("匯入失敗：" + err.message);
+        } finally {
+          e.target.value = "";
+        }
+      };
+      reader.readAsText(file);
+    }
 
-          const days = Object.keys(d.dailyLogs).length;
-          const wCount = d.weight && Array.isArray(d.weight.rec) ? d.weight.rec.length : Object.values(d.dailyLogs).filter(l => l && l.weight > 0).length;
-          const when = obj.exportedAt ? new Date(obj.exportedAt).toLocaleString("zh-TW") : "未知";
-          const msg = `備份檔內容：\n• ${days} 天的飲食紀錄\n• ${wCount} 筆體重紀錄\n• ${d.foods.length} 項食材、${d.templates.length} 個範本\n• 匯出時間：${when}\n\n匯入後會「取代」目前所有資料（之後可用「還原」按鈕復原一次），確定嗎？`;
-          if (!confirm(msg)) return;
+    // =====================================================================
+    // 完整 CSV 備份 (飲食 + 體重 + 食材庫 + 範本 + 設定，分段存在同一個檔案)
+    //   每一段以「#段落名稱」開頭，下一列是欄位名稱，再來是資料。可用試算表開啟。
+    // =====================================================================
+    const FULL_CSV_APP = "fat-loss-pwa-full-csv";
+    const FULL_SECTIONS = ["meta", "profile", "weight_settings", "weight", "foods", "templates", "meals"];
+    const FOOD_KNOWN = ["id", "name", "category", "calPer100", "proteinPer100", "unit", "pieceName", "pieceG", "fav", "unitOnly", "isSalmon", "aliases"];
+    let fullCsvMode = "replace";
 
-          // 先保留整份快照，匯入錯了還能還原
-          try { localStorage.setItem(LS_PREV_ALL, JSON.stringify({ t: Date.now(), raw: localStorage.getItem(LS_DATA) })); } catch (_) {}
+    function csvCell(v) {
+      if (v == null) return "";
+      const t = String(v);
+      return /[",\r\n]/.test(t) || /^\s|\s$/.test(t) ? '"' + t.replace(/"/g, '""') + '"' : t;
+    }
 
-          state.profile = Object.assign({}, state.profile, isObj(d.profile) ? d.profile : {});
-          state.foods = d.foods;
-          state.templates = d.templates;
-          state.dailyLogs = d.dailyLogs;
-          WT.replaceAll(d.weight);
-          migrateData(obj.dataVersion || 1);
-          saveState();
-          setCurrentDate(todayStr());
-          WT.fillGoalForm();
-          WT.render();
-          renderLibrary();
-          renderProfile();
-          showToast(`已匯入 ${days} 天的飲食紀錄與 ${state.weight.rec.length} 筆體重紀錄`);
+    function buildFullCsv() {
+      const d = buildBackup().data, out = [];
+      const row = (...c) => out.push(c.map(csvCell).join(","));
+      const sec = (name, ...head) => { row("#" + name); row(...head); };
+      const foodName = (id) => { const f = state.foods.find(x => x.id === id); return f ? f.name : ""; };
+
+      sec("meta", "key", "value");
+      row("app", FULL_CSV_APP); row("format", 1); row("dataVersion", DATA_VERSION); row("exportedAt", new Date().toISOString());
+
+      sec("profile", "key", "value_json");
+      Object.keys(d.profile).forEach(k => row(k, JSON.stringify(d.profile[k])));
+
+      sec("weight_settings", "key", "value_json");
+      Object.keys(d.weight).forEach(k => { if (k !== "rec" && k !== "coach") row(k, JSON.stringify(d.weight[k])); });
+
+      sec("weight", "date", "time", "tag", "weight", "note");
+      (d.weight.rec || []).slice().sort((a, b) => (a.d + a.t).localeCompare(b.d + b.t)).forEach(e => row(e.d, e.t, e.g, e.w, e.n));
+
+      sec("foods", ...FOOD_KNOWN, "extra_json");
+      d.foods.forEach(f => {
+        const extra = {};
+        Object.keys(f).forEach(k => { if (!FOOD_KNOWN.includes(k)) extra[k] = f[k]; });
+        row(f.id, f.name, f.category, f.calPer100, f.proteinPer100, f.unit || "", f.pieceName || "", f.pieceG || "",
+          f.fav ? 1 : "", f.unitOnly ? 1 : "", f.isSalmon ? 1 : "", (f.aliases || []).join(" | "),
+          Object.keys(extra).length ? JSON.stringify(extra) : "");
+      });
+
+      sec("templates", "id", "name", "summary", "items_json");
+      d.templates.forEach(t => row(t.id, t.name, tplSummary(t).text, JSON.stringify(t.items || {})));
+
+      sec("meals", "date", "meal", "type", "category", "food_id", "name", "weight", "cal", "protein", "done");
+      Object.keys(d.dailyLogs).sort().forEach(ds => {
+        const meals = (d.dailyLogs[ds] || {}).meals || {};
+        const keys = MEAL_TYPES.map(m => m.key).filter(k => meals[k]).concat(Object.keys(meals).filter(k => !MEAL_TYPES.some(m => m.key === k)));
+        keys.forEach(mk => {
+          const m = meals[mk];
+          if (!m || typeof m !== "object") return;
+          row(ds, mk, "meal", "", "", "", "", "", "", m.done === true ? 1 : 0);
+          CAT_KEYS.forEach(c => slotItems(m, c.key).forEach(it => {
+            if (!it || !it.id) return;
+            const f = state.foods.find(x => x.id === it.id), w = parseFloat(it.weight) || 0;
+            row(ds, mk, "item", c.key, it.id, foodName(it.id), it.weight === "" ? "" : w,
+              f ? Math.round(f.calPer100 * w / 100 * 10) / 10 : "", f ? Math.round(f.proteinPer100 * w / 100 * 10) / 10 : "", "");
+          }));
+          (Array.isArray(m.extra) ? m.extra : []).forEach(x => row(ds, mk, "extra", "", "", x.name || "外食", "", x.cal, x.protein || 0, ""));
+        });
+      });
+      return "\uFEFF" + out.join("\r\n") + "\r\n";
+    }
+
+    function fullCsvName() { return `fat_loss_backup_${todayStr()}.csv`; }
+
+    function downloadFullCsv(quiet) {
+      downloadCSV(buildFullCsv(), fullCsvName());
+      markBackedUp();
+      if (!quiet) showToast("完整 CSV 已下載");
+    }
+
+    async function shareFullCsv() {
+      const file = new File([buildFullCsv()], fullCsvName(), { type: "text/csv" });
+      if (navigator.canShare && navigator.canShare({ files: [file] })) {
+        try {
+          await navigator.share({ files: [file], title: "積木減脂完整備份 (CSV)" });
+          markBackedUp();
+          showToast("備份已送出");
+          return;
+        } catch (err) {
+          if (err && err.name === "AbortError") return;
+          showToast("分享失敗，改為下載", "#b45309");
+        }
+      } else {
+        showToast("此瀏覽器不支援檔案分享（需 HTTPS），改為下載", "#b45309");
+      }
+      downloadFullCsv(true);
+    }
+
+    // 解析完整 CSV → 與 JSON 備份相同結構的 data
+    function parseFullCsv(text) {
+      const rows = csvParse(text), secs = {};
+      let cur = null;
+      rows.forEach(r => {
+        const c0 = String(r[0] == null ? "" : r[0]).trim();
+        if (c0.startsWith("#") && FULL_SECTIONS.includes(c0.slice(1)) && r.slice(1).every(x => String(x).trim() === "")) {
+          cur = c0.slice(1); secs[cur] = { head: null, rows: [] }; return;
+        }
+        if (!cur) return;
+        if (!secs[cur].head) { secs[cur].head = r.map(x => String(x).trim()); return; }
+        secs[cur].rows.push(r);
+      });
+      const recs = (name) => {
+        const sc = secs[name];
+        if (!sc || !sc.head) return [];
+        return sc.rows.map(r => { const o = {}; sc.head.forEach((h, i) => { o[h] = r[i] == null ? "" : r[i]; }); return o; });
+      };
+      const meta = {};
+      recs("meta").forEach(o => { meta[o.key] = o.value; });
+      if (meta.app !== FULL_CSV_APP) throw new Error("這不是「完整CSV」備份檔。體重專用的 CSV 請到「體重」分頁匯入，食材 CSV 請到「食材範本」分頁匯入。");
+      const jv = (txt) => { try { return JSON.parse(txt); } catch (_) { return txt; } };
+      const num = (v) => { const n = parseFloat(v); return Number.isFinite(n) ? n : NaN; };
+
+      const profile = {};
+      recs("profile").forEach(o => { if (o.key) profile[o.key] = jv(o.value_json); });
+
+      const wset = {};
+      recs("weight_settings").forEach(o => { if (o.key) wset[o.key] = jv(o.value_json); });
+      wset.rec = recs("weight").map(o => ({ d: o.date, t: o.time, g: o.tag, w: num(o.weight), n: o.note }));
+
+      const foods = recs("foods").map((o, i) => {
+        const f = { id: o.id, name: o.name, category: o.category, calPer100: num(o.calPer100), proteinPer100: num(o.proteinPer100), unit: o.unit || (o.category === "drink" ? "ml" : "g") };
+        if (!f.id || !f.name || !Number.isFinite(f.calPer100) || !Number.isFinite(f.proteinPer100)) throw new Error(`食材資料格式不正確（食材段落第 ${i + 1} 筆）`);
+        if (o.pieceName && num(o.pieceG) > 0) { f.pieceName = o.pieceName; f.pieceG = num(o.pieceG); }
+        if (String(o.fav) === "1") f.fav = true;
+        if (String(o.unitOnly) === "1") f.unitOnly = true;
+        if (String(o.isSalmon) === "1") f.isSalmon = true;
+        const al = String(o.aliases || "").split("|").map(x => x.trim()).filter(Boolean);
+        if (al.length) f.aliases = al;
+        if (o.extra_json) { const ex = jv(o.extra_json); if (isObjX(ex)) Object.keys(ex).forEach(k => { if (!(k in f)) f[k] = ex[k]; }); }
+        return f;
+      });
+
+      const templates = recs("templates").map((o, i) => {
+        const items = jv(o.items_json);
+        if (!o.id || !o.name || !isObjX(items)) throw new Error(`範本資料格式不正確（範本段落第 ${i + 1} 筆）`);
+        return { id: o.id, name: o.name, items: normalizeMeal(items) };
+      });
+
+      const dailyLogs = {};
+      recs("meals").forEach((o, i) => {
+        if (!/^\d{4}-\d{2}-\d{2}$/.test(o.date) || !o.meal) throw new Error(`飲食資料格式不正確（飲食段落第 ${i + 1} 筆）`);
+        const log = dailyLogs[o.date] || (dailyLogs[o.date] = { meals: {} });
+        const meal = log.meals[o.meal] || (log.meals[o.meal] = {});
+        if (o.type === "meal") { if (String(o.done) === "1") meal.done = true; }
+        else if (o.type === "item") {
+          if (!o.food_id || !o.category) return;
+          const w = num(o.weight);
+          (meal[o.category] = meal[o.category] || []).push({ id: o.food_id, weight: Number.isFinite(w) ? w : "" });
+        } else if (o.type === "extra") {
+          const cal = num(o.cal);
+          if (!Number.isFinite(cal)) return;
+          (meal.extra = meal.extra || []).push({ name: o.name || "外食", cal, protein: Number.isFinite(num(o.protein)) ? num(o.protein) : 0 });
+        }
+      });
+
+      const ver = parseInt(meta.dataVersion, 10) || 1;
+      return { d: { profile, foods, templates, dailyLogs, weight: wset }, ver, exportedAt: meta.exportedAt || "" };
+    }
+
+    const impHasItems = (m) => !!m && typeof m === "object" && ((Array.isArray(m.extra) && m.extra.length > 0) || CAT_KEYS.some(c => slotItems(m, c.key).some(it => it && it.id && it.weight > 0)));
+
+    // 合併匯入：只補上缺少的資料，不刪除也不修改現有內容
+    function mergeWithFullData(d, ver) {
+      const haveFood = new Set(state.foods.map(f => f.id)), haveTpl = new Set(state.templates.map(t => t.id));
+      const newFoods = d.foods.filter(f => !haveFood.has(f.id));
+      const newTpls = d.templates.filter(t => !haveTpl.has(t.id));
+      const plan = [];
+      let keepLocal = 0;
+      Object.keys(d.dailyLogs).forEach(ds => {
+        const meals = (d.dailyLogs[ds] || {}).meals || {};
+        Object.keys(meals).forEach(mk => {
+          if (!impHasItems(meals[mk])) return;
+          if (mealHasItems(ds, mk)) keepLocal++; else plan.push([ds, mk]);
+        });
+      });
+      const wp = WT.merge(WT.normalize(d.weight), true);
+      if (!newFoods.length && !newTpls.length && !plan.length && !wp.add && !wp.cfgAdopt) {
+        showToast("沒有需要新增的資料（檔案內容目前都已經有了）", "#b45309");
+        return false;
+      }
+      const dayN = new Set(plan.map(p => p[0])).size;
+      const msg = `合併匯入：\n• 新增 ${plan.length} 餐飲食紀錄（${dayN} 天）${keepLocal ? `；本機已有內容的 ${keepLocal} 餐保留現有版本` : ""}\n• 新增 ${wp.add} 筆體重紀錄${wp.dup ? `（重複 ${wp.dup} 筆略過${wp.diff ? `，其中 ${wp.diff} 筆體重不同，保留目前版本` : ""}）` : ""}${wp.cfgAdopt ? "；並帶入目標設定" : ""}\n• 新增 ${newFoods.length} 項食材、${newTpls.length} 個範本\n\n現有資料不會被刪除或修改（之後可用「還原」按鈕復原一次）。確定嗎？`;
+      if (!confirm(msg)) return false;
+
+      snapshotAll();
+      newFoods.forEach(f => state.foods.push(clone(f)));
+      newTpls.forEach(t => state.templates.push(clone(t)));
+      plan.forEach(([ds, mk]) => {
+        if (!state.dailyLogs[ds]) state.dailyLogs[ds] = { meals: {} };
+        if (!state.dailyLogs[ds].meals) state.dailyLogs[ds].meals = {};
+        state.dailyLogs[ds].meals[mk] = clone(d.dailyLogs[ds].meals[mk]);
+      });
+      WT.merge(WT.normalize(d.weight), false);
+      saveState();
+      refreshAfterImport();
+      showToast(`已合併：新增 ${plan.length} 餐飲食、${wp.add} 筆體重、${newFoods.length} 項食材、${newTpls.length} 個範本`);
+      return true;
+    }
+
+    function importFullCsv(e) {
+      const file = e.target.files[0];
+      if (!file) return;
+      const reader = new FileReader();
+      reader.onload = (ev) => {
+        try {
+          const { d, ver, exportedAt } = parseFullCsv(String(ev.target.result || ""));
+          validateFullData(d);
+          if (fullCsvMode === "merge") mergeWithFullData(d, ver);
+          else replaceWithFullData(d, ver, exportedAt);
         } catch (err) {
           alert("匯入失敗：" + err.message);
         } finally {
@@ -3064,8 +3606,8 @@
       function stepWeight() {
         const needTarget = intent !== "diet";
         body().innerHTML = dots(1) + head("⚖️", needTarget ? "目前體重與目標" : "目前體重", needTarget ? "兩個數字就夠。系統先用每週 0.5 公斤的穩健速度排一個計畫，之後都能改。" : "用來估算你每天大約消耗多少熱量。") +
-          `<div class="space-y-4"><div><label class="${lbl}">目前體重 (kg)</label><input id="ob-w0" type="number" step="0.1" inputmode="decimal" class="${inp}" placeholder="例：72.5"></div>` +
-          (needTarget ? `<div><label class="${lbl}">目標體重 (kg)</label><input id="ob-wt" type="number" step="0.1" inputmode="decimal" class="${inp}" placeholder="例：65"></div>` : "") +
+          `<div class="space-y-4"><div><label class="${lbl}">目前體重 (kg)</label><input id="ob-w0" type="number" step="0.01" inputmode="decimal" class="${inp}" placeholder="例：72.5"></div>` +
+          (needTarget ? `<div><label class="${lbl}">目標體重 (kg)</label><input id="ob-wt" type="number" step="0.01" inputmode="decimal" class="${inp}" placeholder="例：65"></div>` : "") +
           `<button type="button" onclick="OB.submitWeight()" class="w-btn w-full">下一步</button></div>` + skip("OB.stepBody()");
       }
       function submitWeight() {
@@ -3172,6 +3714,7 @@
 
       function finish() {
         state.setup.done = true; state.setup.intent = intent; state.weight.intro = 1;
+        if (intent === "weight") state.profile.startTab = "tab-weight";   // 只記體重的人，之後開啟直接進體重頁 (可在設定改)
         saveState();
         byId("onboarding").classList.add("hidden");
         WT.fillGoalForm(); WT.render(); renderTracker(); renderProfile();
