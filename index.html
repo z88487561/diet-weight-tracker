@@ -44,7 +44,7 @@
     details[open] > summary::after { content: "▴"; }
 
     /* 標題列：與 App 圖示同色的青綠色 */
-    .app-header { background: #107d75; }
+    .app-header { background: #107d75; padding-top: env(safe-area-inset-top, 0px); }   /* Android 16 App 邊到邊顯示：讓出狀態列 */
     .app-header-badge { background: #0b5f59; color: #d5efec; }
     /* 左右滑動換頁的轉場 */
     main { overflow-x: clip; }
