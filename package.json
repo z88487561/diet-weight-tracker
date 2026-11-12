@@ -1,0 +1,21 @@
+{
+  "name": "diet-weight-tracker",
+  "version": "1.0.0",
+  "private": true,
+  "description": "積木減脂：飲食 × 體重 — PWA 與 Android App（Capacitor）",
+  "scripts": {
+    "build:web": "node scripts/build-web.mjs",
+    "sync": "npm run build:web && cap sync android",
+    "android:open": "npm run sync && cap open android"
+  },
+  "dependencies": {
+    "@capacitor/android": "^8.6.0",
+    "@capacitor/core": "^8.6.0",
+    "@capacitor/filesystem": "^8.1.5",
+    "@capacitor/share": "^8.0.3"
+  },
+  "devDependencies": {
+    "@capacitor/cli": "^8.6.0"
+  },
+  "engines": { "node": ">=22" }
+}

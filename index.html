@@ -116,6 +116,12 @@
         <button id="btn-reminder-snooze" aria-label="7 天內不再提醒" class="shrink-0 text-sky-500 px-1 text-base leading-none">×</button>
       </div>
 
+      <!-- 自動備份失敗警告（Android App） -->
+      <div id="auto-backup-alert" class="hidden bg-amber-50 border border-amber-200 rounded-xl p-3 text-amber-900 text-xs flex items-center gap-2 shadow-sm">
+        <span id="auto-backup-alert-text" class="flex-1"></span>
+        <button id="btn-alert-backup" class="shrink-0 bg-amber-600 text-white px-2.5 py-1 rounded-lg font-medium">匯出備份</button>
+      </div>
+
       <!-- 日期與概覽卡片 -->
       <div class="bg-white rounded-2xl p-4 shadow-sm border border-slate-100 space-y-3">
         <div class="flex justify-between items-center">
@@ -801,7 +807,8 @@
     </div>
   </div>
 
-  <script src="js/weight.js"></script>
+  <script src="js/backup.js"></script>
+<script src="js/weight.js"></script>
   <script>
     // --- 預設食材庫 (每 100g / 100ml；肉、菜、澱粉以熟重計) ---
     const DEFAULT_FOODS = [
@@ -1008,6 +1015,7 @@
     const LS_PREV_ALL = "fat_loss_pwa_prev_all";     // 匯入完整備份前的整份快照
     const LS_LAST_BACKUP = "fat_loss_pwa_last_backup";
     const LS_BACKUP_SNOOZE = "fat_loss_pwa_backup_snooze";
+    let abTimer = null, abPruneDay = null;   // 自動備份（Android App）的計時器與「今天已清理過期檔」標記
 
     const byId = (id) => document.getElementById(id);
     function esc(str) {
@@ -1192,11 +1200,14 @@
       }
       // 請瀏覽器把資料標記為「持久儲存」，降低空間不足時被清除的機率
       updateStorageNote(true);
+      scheduleAutoBackup();   // 啟動時備份一次，也能立刻發現寫入問題
+      document.addEventListener("visibilitychange", () => { if (document.hidden && abTimer) runAutoBackup(); });
     }
 
     async function updateStorageNote(ask) {
       const el = byId("storage-note");
       if (!el) return;
+      if (Backup.canAuto) { renderAutoBackupStatus(); return; }   // Android App：顯示自動備份狀態
       if (!(navigator.storage && navigator.storage.persisted)) { el.textContent = "此瀏覽器不支援持久儲存設定"; return; }
       try {
         let ok = await navigator.storage.persisted();
@@ -1314,7 +1325,7 @@
     }
 
     function registerSW() {
-      if (!("serviceWorker" in navigator) || location.protocol === "file:") return;
+      if (IS_NATIVE || !("serviceWorker" in navigator) || location.protocol === "file:") return;   // APK 內資源已在本機，不需要 SW
       const hadController = !!navigator.serviceWorker.controller;
       navigator.serviceWorker.register("sw.js").catch(() => {});
       navigator.serviceWorker.addEventListener("controllerchange", () => {
@@ -1465,6 +1476,7 @@
           weight: state.weight,
           setup: state.setup
         }));
+        scheduleAutoBackup();
         return true;
       } catch (e) {
         showToast("⚠️ 資料未能儲存（瀏覽器儲存空間不足或被停用），請立即匯出完整備份", "#dc2626", 8000);
@@ -1527,6 +1539,7 @@
       byId("btn-merge-full-csv").addEventListener("click", () => { fullCsvMode = "merge"; byId("file-import-full-csv").click(); });
       byId("file-import-full-csv").addEventListener("change", importFullCsv);
       byId("btn-reminder-go").addEventListener("click", () => exportFullBackup());
+      byId("btn-alert-backup").addEventListener("click", () => exportFullBackup());
       byId("btn-restore-all").addEventListener("click", restoreAll);
       byId("btn-reminder-snooze").addEventListener("click", () => {
         localStorage.setItem(LS_BACKUP_SNOOZE, addDays(todayStr(), 7));
@@ -2922,16 +2935,17 @@
       reader.readAsText(file);
     }
 
+    /** 存成檔案：瀏覽器觸發下載；Android App 存進「文件／DietWeightTracker」。回傳 Promise<boolean> */
+    function saveFileOut(file) {
+      const p = Backup.download(file);   // 瀏覽器版必須在點擊手勢內同步發動
+      return p.then((n) => {
+        if (Backup.kind === "native") showToast(n ? `已存到「${Backup.savedWhere}」：${n}` : "存檔失敗，請確認儲存權限", n ? undefined : "#dc2626");
+        else if (n && /\.json$/i.test(file.name)) showToast("備份已匯出");
+        return !!n;
+      });
+    }
     function downloadCSV(csvContent, fileName) {
-      const blob = new Blob([csvContent], { type: 'text/csv;charset=utf-8;' });
-      const link = document.createElement("a");
-      const url = URL.createObjectURL(blob);
-      link.setAttribute("href", url);
-      link.setAttribute("download", fileName);
-      link.style.visibility = 'hidden';
-      document.body.appendChild(link);
-      link.click();
-      document.body.removeChild(link);
+      return saveFileOut(new File([csvContent], fileName, { type: "text/csv" }));
     }
 
     // --- TAB 4: 個人設定 ---
@@ -3126,6 +3140,31 @@
       showToast("已刪除");
     }
 
+    // --- 自動備份（Android App：文件／DietWeightTracker）---
+    function scheduleAutoBackup() {
+      if (!Backup.canAuto) return;
+      clearTimeout(abTimer); abTimer = setTimeout(runAutoBackup, 1500);
+    }
+    async function runAutoBackup() {
+      clearTimeout(abTimer); abTimer = null;
+      if (!Backup.canAuto) return;
+      // 完全沒有紀錄時不備份：避免「清除 App 資料」後的空白資料蓋掉還沒還原的備份檔
+      const recorded = Object.keys(state.dailyLogs).filter(dayHasRecord).length + state.weight.rec.length;
+      if (!recorded) return;
+      const day = todayStr();
+      const ok = await Backup.write(JSON.stringify(buildBackup(), null, 2), day, abPruneDay !== day);
+      if (ok) {
+        abPruneDay = day;
+        if (localStorage.getItem(LS_LAST_BACKUP) !== day) markBackedUp();   // 自動備份成功也算「已備份」
+      }
+      renderAutoBackupStatus();
+    }
+    function renderAutoBackupStatus() {
+      const st = Backup.status(), box = byId("auto-backup-alert");
+      if (box) { box.classList.toggle("hidden", !st.alert); byId("auto-backup-alert-text").textContent = st.alert || ""; }
+      if (Backup.canAuto) { const el = byId("storage-note"); if (el) el.textContent = st.text; }
+    }
+
     // --- 完整備份 (JSON) ---
     function buildBackup() {
       return {
@@ -3144,30 +3183,16 @@
 
     async function exportFullBackup() {
       const json = JSON.stringify(buildBackup(), null, 2);
-      const name = `fat_loss_backup_${todayStr()}.json`;   // 內含飲食 + 體重
-      // 手機：優先用分享選單，可直接「存到檔案」/ 傳給自己；電腦：直接下載
-      try {
-        const file = new File([json], name, { type: "application/json" });
-        if (window.matchMedia("(pointer:coarse)").matches && navigator.canShare && navigator.canShare({ files: [file] })) {
-          await navigator.share({ files: [file], title: "積木減脂備份" });
-          markBackedUp();
-          showToast("備份已匯出");
-          return;
-        }
-      } catch (err) {
-        if (err && err.name === "AbortError") return;
+      const file = new File([json], `fat_loss_backup_${todayStr()}.json`, { type: "application/json" });   // 內含飲食 + 體重
+      // 手機（含 Android App）：優先用分享選單，可直接「存到檔案」/ 傳給自己；電腦：直接下載
+      if (IS_NATIVE || window.matchMedia("(pointer:coarse)").matches) {
+        try {
+          const r = await Backup.share(file, "積木減脂備份");
+          if (r === "cancel") return;
+          if (r === "shared") { markBackedUp(); showToast("備份已匯出"); return; }
+        } catch (err) { /* 分享失敗：改為下載／存檔 */ }
       }
-      const blob = new Blob([json], { type: "application/json" });
-      const url = URL.createObjectURL(blob);
-      const a = document.createElement("a");
-      a.href = url;
-      a.download = name;
-      document.body.appendChild(a);
-      a.click();
-      document.body.removeChild(a);
-      setTimeout(() => URL.revokeObjectURL(url), 2000);
-      markBackedUp();
-      showToast("備份已匯出");
+      if (await saveFileOut(file)) markBackedUp();
     }
 
     // 檢查備份資料的基本結構 (JSON / CSV 共用)；不合格就丟出錯誤
@@ -3301,25 +3326,22 @@
     function fullCsvName() { return `fat_loss_backup_${todayStr()}.csv`; }
 
     function downloadFullCsv(quiet) {
-      downloadCSV(buildFullCsv(), fullCsvName());
-      markBackedUp();
-      if (!quiet) showToast("完整 CSV 已下載");
+      downloadCSV(buildFullCsv(), fullCsvName()).then((ok) => {
+        if (!ok) return;
+        markBackedUp();
+        if (!quiet && Backup.kind !== "native") showToast("完整 CSV 已下載");
+      });
     }
 
     async function shareFullCsv() {
       const file = new File([buildFullCsv()], fullCsvName(), { type: "text/csv" });
-      if (navigator.canShare && navigator.canShare({ files: [file] })) {
-        try {
-          await navigator.share({ files: [file], title: "積木減脂完整備份 (CSV)" });
-          markBackedUp();
-          showToast("備份已送出");
-          return;
-        } catch (err) {
-          if (err && err.name === "AbortError") return;
-          showToast("分享失敗，改為下載", "#b45309");
-        }
-      } else {
-        showToast("此瀏覽器不支援檔案分享（需 HTTPS），改為下載", "#b45309");
+      try {
+        const r = await Backup.share(file, "積木減脂完整備份 (CSV)");
+        if (r === "cancel") return;
+        if (r === "shared") { markBackedUp(); showToast("備份已送出"); return; }
+        showToast(Backup.kind === "native" ? "無法開啟分享選單，改為存檔" : "此瀏覽器不支援檔案分享（需 HTTPS），改為下載", "#b45309");
+      } catch (err) {
+        showToast("分享失敗，改為下載", "#b45309");
       }
       downloadFullCsv(true);
     }

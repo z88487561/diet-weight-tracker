@@ -590,23 +590,28 @@ const WT = (() => {
     ["#config,,,," + q(JSON.stringify(Object.assign({}, S.cfg || {}, { h: state.profile.height })))]
       .concat(sorted().map(e => [e.d, e.t, q(e.g), e.w, q(e.n)].join(","))).join("\n");
 
+  /** 存成檔案：瀏覽器觸發下載；Android App 存進「文件／DietWeightTracker」。回傳 Promise<boolean> */
   function download(name, text, mime) {
     try {
-      const a = document.createElement("a");
-      a.href = URL.createObjectURL(new Blob([text], { type: mime }));
-      a.download = name; a.click();
-      setTimeout(() => URL.revokeObjectURL(a.href), 999);
-    } catch (e) {}
+      const p = Backup.download(new File([text], name, { type: mime }));   // 瀏覽器版必須在點擊手勢內同步發動
+      return p.then((n) => {
+        if (Backup.kind === "native") toast(n ? "已存到「" + Backup.savedWhere + "」：" + n : "存檔失敗，請確認儲存權限", n ? undefined : "#dc2626");
+        return !!n;
+      });
+    } catch (e) { return Promise.resolve(false); }
   }
   function markExported() { S.lastExp = Date.now(); sv(); renderCsvNote(); }
-  function backupCsv() { markExported(); download("weight-backup-" + today() + ".csv", csvText(), "text/csv"); }
+  function backupCsv() { download("weight-backup-" + today() + ".csv", csvText(), "text/csv").then((ok) => { if (ok) markExported(); }); }
 
   async function shareCsv() {
     const f = new File([csvText()], "weight-backup-" + today() + ".csv", { type: "text/csv" });
-    if (navigator.canShare && navigator.canShare({ files: [f] })) {
-      try { await navigator.share({ files: [f], title: "體重備份" }); markExported(); toast("備份已送出", "#16a34a"); }
-      catch (e) { if (e.name !== "AbortError") { toast("分享失敗，改為下載", "#b45309"); backupCsv(); } }
-    } else { toast("此瀏覽器不支援檔案分享(需 HTTPS)，改為下載", "#b45309"); backupCsv(); }
+    try {
+      const r = await Backup.share(f, "體重備份");
+      if (r === "cancel") return;
+      if (r === "shared") { markExported(); toast("備份已送出", "#16a34a"); return; }
+      toast(Backup.kind === "native" ? "無法開啟分享選單，改為存檔" : "此瀏覽器不支援檔案分享(需 HTTPS)，改為下載", "#b45309");
+    } catch (e) { toast("分享失敗，改為下載", "#b45309"); }
+    backupCsv();
   }
 
   const snap = () => { try { localStorage.setItem(PREV_KEY, JSON.stringify({ rec: S.rec, cfg: S.cfg, bg: S.bg, coach: S.coach, rem: S.rem, rng: S.rng, t: Date.now() })); } catch (e) {} };

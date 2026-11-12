@@ -1,0 +1,8 @@
+{
+  "appId": "io.github.z88487561.dietweighttracker",
+  "appName": "積木減脂",
+  "webDir": "www",
+  "android": {
+    "allowMixedContent": false
+  }
+}

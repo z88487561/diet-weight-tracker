@@ -1,7 +1,7 @@
 // 積木式減脂 PWA — Service Worker
 // 每次更新任何檔案 (index.html / tailwind.css / vendor...) 後，請把下面版本號 +1，
 // 使用者才會拿到新版本。
-const VERSION = "v8";
+const VERSION = "v10";
 const CACHE = `fatloss-${VERSION}`;
 
 const ASSETS = [
@@ -9,6 +9,7 @@ const ASSETS = [
   "./index.html",
   "./manifest.webmanifest",
   "./tailwind.css",
+  "./js/backup.js",
   "./js/weight.js",
   "./vendor/chart.umd.min.js",
   "./vendor/lucide.min.js",

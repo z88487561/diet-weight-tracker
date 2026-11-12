@@ -1,9 +1,9 @@
 {
+  "id": "./?app=diet-weight-tracker",
   "name": "積木減脂：飲食與體重",
   "short_name": "積木減脂",
   "description": "積木式減脂飲食記錄 + 體重目標追蹤",
   "lang": "zh-TW",
-  "id": "./",
   "start_url": "./index.html",
   "scope": "./",
   "display": "standalone",

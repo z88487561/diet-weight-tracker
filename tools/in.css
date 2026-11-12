@@ -1,0 +1,16 @@
+@tailwind base;
+@tailwind components;
+@tailwind utilities;
+
+@layer components {
+  .w-card { @apply bg-white rounded-2xl p-4 shadow-sm border border-slate-100; }
+  .w-lbl { @apply block text-[11px] font-semibold text-slate-500 mb-1; }
+  .w-inp { @apply w-full bg-slate-50 border border-slate-200 rounded-xl px-3 py-2 text-sm min-h-[44px] focus:outline-none focus:ring-2 focus:ring-emerald-500; }
+  .w-btn { @apply bg-emerald-600 text-white font-medium px-4 py-2 rounded-xl text-sm min-h-[44px] hover:bg-emerald-700 transition; }
+  .w-btn-s { @apply bg-slate-100 text-slate-700 font-medium px-4 py-2 rounded-xl text-xs min-h-[44px] hover:bg-slate-200 transition; }
+  .w-btn-d { @apply bg-red-600 text-white font-medium px-4 py-2 rounded-xl text-xs min-h-[44px] hover:bg-red-700 transition; }
+  /* 體重圖表 (SVG) 的顏色，深色模式會在 gen_dark.py 產生的規則裡覆蓋 */
+  .c-grid { stroke: #e5e7eb; }
+  .c-mu { fill: #6b7280; }
+  .c-dot { stroke: #fff; }
+}

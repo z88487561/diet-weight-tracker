@@ -1,0 +1,32 @@
+<svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 512 512" width="512" height="512">
+  <defs>
+    <rect id="bg" width="512" height="512" rx="112" fill="#107d75" />
+    <filter id="shadow" x="-10%" y="-10%" width="120%" height="120%">
+      <feDropShadow dx="0" dy="8" stdDeviation="12" flood-color="#000000" flood-opacity="0.25"/>
+    </filter>
+  </defs>
+  
+  <!-- Rounded Rect Background -->
+  <use href="#bg"/>
+  <g filter="url(#shadow)">
+    <!-- Scale Base -->
+    <rect x="96" y="106" width="320" height="300" rx="48" fill="#34495E" />
+    <rect x="116" y="126" width="280" height="260" rx="36" fill="#E2F1FF" />
+    <!-- Scale Display Screen -->
+    <rect x="176" y="156" width="160" height="70" rx="16" fill="#1A2634" />
+    <!-- Digital weight / dial -->
+    <path d="M 206 200 A 50 50 0 0 1 306 200" stroke="#7DB3E8" stroke-width="8" fill="none" stroke-linecap="round"/>
+    <circle cx="256" cy="200" r="6" fill="#7DB3E8"/>
+    <line x1="256" y1="200" x2="276" y2="175" stroke="#7DB3E8" stroke-width="6" stroke-linecap="round"/>
+    
+    <!-- Fork & Knife Emblem on scale mat -->
+    <!-- Fork -->
+    <g transform="translate(196, 256)">
+      <path d="M0,0 L0,30 C0,45 15,45 15,30 L15,0 M5,0 L5,25 M10,0 L10,25 M7.5,45 L7.5,90" stroke="#1A2634" stroke-width="7" stroke-linecap="round" stroke-linejoin="round" fill="none"/>
+    </g>
+    <!-- Knife -->
+    <g transform="translate(296, 256)">
+      <path d="M0,0 C12,15 12,35 0,45 L0,90 M0,0 L0,90" stroke="#1A2634" stroke-width="7" stroke-linecap="round" stroke-linejoin="round" fill="none"/>
+    </g>
+  </g>
+</svg>

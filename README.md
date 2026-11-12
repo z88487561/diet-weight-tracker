@@ -15,6 +15,7 @@
 ```
 index.html            主程式（飲食 + 設定 + 整合）
 js/weight.js          體重模組
+js/backup.js          備份目標介面（瀏覽器：下載／分享；Android App：自動備份到「文件／DietWeightTracker」）
 tailwind.css          預先編譯的樣式（Tailwind 3.4.19）
 vendor/               Chart.js 4.6.1、Lucide 1.61.0（固定版本、本地載入）
 sw.js                 Service Worker（離線快取）
@@ -70,3 +71,6 @@ icons/                App 圖示
 ## 與舊版的差異
 - 身高只有一份（設定分頁），BMI 與 TDEE 共用。
 - 可以在尚未設定目標時先記錄體重。
+
+## Android App
+建置與備份說明見 [ANDROID.md](ANDROID.md)。
